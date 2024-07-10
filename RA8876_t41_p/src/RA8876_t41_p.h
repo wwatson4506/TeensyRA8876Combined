@@ -75,6 +75,7 @@
 #include "Arduino.h"
 #include "RA8876Registers.h"
 #include "RA8876_common.h"
+#include "DMAChannel.h"
 
 #ifndef _RA8876_T41_P
 #define _RA8876_T41_P
@@ -91,6 +92,7 @@
 //#define RA8876_CLOCK_READ 120   //equates to 2mhz
 
 
+#define SHIFTER_DMA_REQUEST 3 // only 0, 1, 2, 3 expected to work
 
 //#define BUS_WIDTH 8 /*Available options are 8 or 16 */
 #define SHIFTNUM 8  // number of shifters used (up to 8)
@@ -168,6 +170,8 @@ class RA8876_t41_p : public RA8876_common {
     typedef void (*CBF)();
     CBF _callback;
     void onCompleteCB(CBF callback) {_callback = callback; }
+    bool isCB = false;
+    void _onCompleteCB();
 
     void FlexIO_Clear_Config_SnglBeat();
     void MulBeatWR_nPrm_IRQ(const void *value, uint32_t const length);
@@ -177,6 +181,16 @@ class RA8876_t41_p : public RA8876_common {
     FlexIOHandler *pFlex;
     IMXRT_FLEXIO_t *p;
     const FlexIOHandler::FLEXIO_Hardware_t *hw;
+
+    // DMA 
+    bool isDMACB = false;
+    void _onDMACompleteCB();
+	CBF _DMAcallback;
+	void onDMACompleteCB(CBF callback) {_DMAcallback = callback; }
+	void FlexIO_Config_DMA_MultiBeat();
+	void MulBeatWR_nPrm_DMA(const void *value, uint32_t const length);
+	void pushPixels16bitDMA(const uint16_t * pcolors, uint16_t x1, uint16_t y1, uint16_t x2, uint16_t y2);
+    void DMAerror();
 
     uint8_t _baud_div = 20;
     int8_t _dc; //, _cs, _rst;
@@ -210,6 +224,7 @@ class RA8876_t41_p : public RA8876_common {
     typedef enum { CONFIG_CLEAR = 0,
                    CONFIG_SNGLBEAT,
                    CONFIG_MULTIBEAT,
+                   CONFIG_DMA_MULTIBEAT,
                    CONFIG_SNGLREAD } Flexio_config_state_t;
     Flexio_config_state_t flex_config = CONFIG_CLEAR;
 
@@ -217,8 +232,6 @@ class RA8876_t41_p : public RA8876_common {
 
     void microSecondDelay();
 
-    bool isCB = false;
-    void _onCompleteCB();
 
   private:
     int _cs;
@@ -233,8 +246,13 @@ class RA8876_t41_p : public RA8876_common {
     static void ISR();
     void flexIRQ_Callback();
     static RA8876_t41_p *IRQcallback;
-
     volatile bool WR_IRQTransferDone = true;
+
+    volatile bool WR_DMATransferDone = true;
+    static void dmaISR();
+    void flexDma_Callback();
+    static DMAChannel flexDma;
+    static RA8876_t41_p *dmaCallback;
 };
 
 #endif

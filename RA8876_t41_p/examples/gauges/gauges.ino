@@ -18,13 +18,13 @@
 #if defined(use_spi)
 #define RA8876_CS 10
 #define RA8876_RESET 9
-#define BACKLITE 7 //External backlight control connected to this Arduino pin
+#define BACKLITE 5 //External backlight control connected to this Arduino pin
 RA8876_t3 tft = RA8876_t3(RA8876_CS, RA8876_RESET); //Using standard SPI pins
 #else
 uint8_t dc = 13;
 uint8_t cs = 11;
 uint8_t rst = 12;
-#define BACKLITE 7 //External backlight control connected to this Arduino pin
+#define BACKLITE 5 //External backlight control connected to this Arduino pin
 RA8876_t41_p tft = RA8876_t41_p(dc,cs,rst); //(dc, cs, rst)
 #endif
 

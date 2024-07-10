@@ -307,7 +307,7 @@ FLASHMEM bool RA8876_t41_p::setFlexIOPins(uint8_t write_pin, uint8_t rd_pin, uin
 FASTRUN void RA8876_t41_p::FlexIO_Init() {
     /* Get a FlexIO channel */
     // lets assume D0 is the valid one...
-    Serial.printf("FlexIO_Init: D0:%u WR:%u RD:%u\n", _data_pins[0], _wr_pin, _rd_pin);
+    DBGPrintf("FlexIO_Init: D0:%u WR:%u RD:%u\n", _data_pins[0], _wr_pin, _rd_pin);
 
     pFlex = FlexIOHandler::mapIOPinToFlexIOHandler(_data_pins[0], _flexio_D0);
     if (pFlex == nullptr) {
@@ -747,9 +747,9 @@ FASTRUN void RA8876_t41_p::MulBeatWR_nPrm_IRQ(const void *value, uint32_t const 
     p->SHIFTSIEN |= (1 << SHIFTER_IRQ);
 }
 
-FASTRUN void RA8876_t41_p::_onCompleteCB() {
-    if (_callback) {
-        _callback();
+FASTRUN void RA8876_t41_p::_onDMACompleteCB() {
+    if (_DMAcallback) {
+        _DMAcallback();
     }
     return;
 }
@@ -785,6 +785,247 @@ FASTRUN void RA8876_t41_p::pushPixels16bitAsync(const uint16_t *pcolors, uint16_
     setPixelCursor(x1, y1);
     ramAccessPrepare();
     MulBeatWR_nPrm_IRQ(pcolors, area);
+}
+
+//----------------------------------------------------------------------
+// 8 BIT DMA STUFF starts here
+//----------------------------------------------------------------------
+FASTRUN void RA8876_t41_p::FlexIO_Config_DMA_MultiBeat()
+{
+    if (flex_config == CONFIG_DMA_MULTIBEAT)
+        return;
+    flex_config = CONFIG_DMA_MULTIBEAT;
+    DBGPrintf("RA8876_t41_p::FlexIO_Config_DMA_MultiBeat() - Enter\n");
+
+    uint32_t i;
+    uint8_t MulBeatWR_BeatQty = SHIFTNUM * sizeof(uint32_t) / sizeof(uint8_t);   //Number of beats = number of shifters * beats per shifter
+
+    /* Disable and reset FlexIO */
+    p->CTRL &= ~FLEXIO_CTRL_FLEXEN;
+    p->CTRL |= FLEXIO_CTRL_SWRST;
+    p->CTRL &= ~FLEXIO_CTRL_SWRST;
+
+    pFlex->setIOPinToFlexMode(_wr_pin);
+    gpioWrite();
+
+    for(i=0; i<=SHIFTNUM-1; i++)
+    {
+        p->SHIFTCFG[i] = 
+        FLEXIO_SHIFTCFG_INSRC*(1U)                                                /* Shifter input from next shifter's output */
+      | FLEXIO_SHIFTCFG_SSTOP(0U)                                                 /* Shifter stop bit disabled */
+      | FLEXIO_SHIFTCFG_SSTART(0U)                                                /* Shifter start bit disabled and loading data on enabled */
+      | FLEXIO_SHIFTCFG_PWIDTH(_bus_width - 1);                                    /* 8 bit shift width */
+    }
+
+    p->SHIFTCTL[0] = 
+    FLEXIO_SHIFTCTL_TIMSEL(0)                                                     /* Shifter's assigned timer index */
+      | FLEXIO_SHIFTCTL_TIMPOL*(0U)                                               /* Shift on posedge of shift clock */
+      | FLEXIO_SHIFTCTL_PINCFG(3U)                                                /* Shifter's pin configured as output */
+      | FLEXIO_SHIFTCTL_PINSEL(_flexio_D0)  //4                                               /* Shifter's pin start index */
+      | FLEXIO_SHIFTCTL_PINPOL*(0U)                                               /* Shifter's pin active high */
+      | FLEXIO_SHIFTCTL_SMOD(2U);                                                 /* shifter mode transmit */
+
+    for(i=1; i<=SHIFTNUM-1; i++)
+    {
+        p->SHIFTCTL[i] = 
+        FLEXIO_SHIFTCTL_TIMSEL(0)                                                 /* Shifter's assigned timer index */
+      | FLEXIO_SHIFTCTL_TIMPOL*(0U)                                               /* Shift on posedge of shift clock */
+      | FLEXIO_SHIFTCTL_PINCFG(0U)                                                /* Shifter's pin configured as output disabled */
+      | FLEXIO_SHIFTCTL_PINSEL(_flexio_D0)                                                 /* Shifter's pin start index */
+      | FLEXIO_SHIFTCTL_PINPOL*(0U)                                               /* Shifter's pin active high */
+      | FLEXIO_SHIFTCTL_SMOD(2U);                                                 /* shifter mode transmit */          
+    }
+
+    /* Configure the timer for shift clock */
+    p->TIMCMP[0] = 
+        ((MulBeatWR_BeatQty * 2U - 1) << 8)                                       /* TIMCMP[15:8] = number of beats x 2 – 1 */
+      | (_baud_div/2U - 1U);                                                       /* TIMCMP[7:0] = shift clock divide ratio / 2 - 1 */
+      
+    p->TIMCFG[0] =   FLEXIO_TIMCFG_TIMOUT(0U)                                     /* Timer output logic one when enabled and not affected by reset */
+      | FLEXIO_TIMCFG_TIMDEC(0U)                                                  /* Timer decrement on FlexIO clock, shift clock equals timer output */
+      | FLEXIO_TIMCFG_TIMRST(0U)                                                  /* Timer never reset */
+      | FLEXIO_TIMCFG_TIMDIS(2U)                                                  /* Timer disabled on timer compare */
+      | FLEXIO_TIMCFG_TIMENA(2U)                                                  /* Timer enabled on trigger high */
+      | FLEXIO_TIMCFG_TSTOP(0U)                                                   /* Timer stop bit disabled */
+      | FLEXIO_TIMCFG_TSTART*(0U);                                                /* Timer start bit disabled */
+
+    p->TIMCTL[0] = 
+        FLEXIO_TIMCTL_TRGSEL((0 << 2) | 1U)                                       /* Timer trigger selected as highest shifter's status flag */
+      | FLEXIO_TIMCTL_TRGPOL*(1U)                                                 /* Timer trigger polarity as active low */
+      | FLEXIO_TIMCTL_TRGSRC*(1U)                                                 /* Timer trigger source as internal */
+      | FLEXIO_TIMCTL_PINCFG(3U)                                                  /* Timer' pin configured as output */
+      | FLEXIO_TIMCTL_PINSEL(_flexio_WR)                                                   /* Timer' pin index: WR pin */
+      | FLEXIO_TIMCTL_PINPOL*(1U)                                                 /* Timer' pin active low */
+      | FLEXIO_TIMCTL_TIMOD(1U);                                                  /* Timer mode 8-bit baud counter */
+
+    /* Enable FlexIO */
+   p->CTRL |= FLEXIO_CTRL_FLEXEN;
+   p->SHIFTSDEN |= 1U << (SHIFTER_DMA_REQUEST); // enable DMA trigger when shifter status flag is set on shifter SHIFTER_DMA_REQUEST
+    DBGPrintf("RA8876_t41_p::FlexIO_Config_MultiBeat() - Exit\n");
+}
+
+RA8876_t41_p * RA8876_t41_p::dmaCallback = nullptr;
+DMAChannel RA8876_t41_p::flexDma;
+
+FASTRUN void RA8876_t41_p::MulBeatWR_nPrm_DMA(const void *value, uint32_t const length) 
+{
+  while(WR_DMATransferDone == false) {}  //Wait for any DMA transfers to complete
+
+  uint32_t BeatsPerMinLoop = SHIFTNUM * sizeof(uint32_t) / sizeof(uint8_t);   // Number of shifters * number of 8 bit values per shifter
+  uint32_t majorLoopCount, minorLoopBytes;
+  uint32_t destinationModulo = 31-(__builtin_clz(SHIFTNUM*sizeof(uint32_t))); // defines address range for circular DMA destination buffer 
+
+  CSLow();
+  DCHigh();
+
+  if (length < 8){
+    const uint16_t * newValue = (uint16_t*)value;
+    uint16_t buf;
+    for(uint32_t i=0; i<length; i++) {
+        buf = *newValue++;
+          while(0 == (p->SHIFTSTAT & (1U << 0))) {}
+          p->SHIFTBUF[0] = buf >> 8;
+          while(0 == (p->SHIFTSTAT & (1U << 0))) {}
+          p->SHIFTBUF[0] = buf & 0xFF;
+    }        
+    //Wait for transfer to be completed 
+    while(0 == (p->TIMSTAT & (1U << 0))) {}
+    CSHigh();
+
+  } else {
+    
+  FlexIO_Config_DMA_MultiBeat();
+    
+  MulBeatCountRemain = length % BeatsPerMinLoop;
+  MulBeatDataRemain = (uint16_t*)value + ((length - MulBeatCountRemain)); // pointer to the next unused byte (overflow if MulBeatCountRemain = 0)
+  TotalSize = (length - MulBeatCountRemain)*2;               /* in bytes */
+  minorLoopBytes = SHIFTNUM * sizeof(uint32_t);
+  majorLoopCount = TotalSize/minorLoopBytes;
+  /* Configure FlexIO with multi-beat write configuration */
+  flexDma.begin();
+
+  int destinationAddressOffset, destinationAddressLastOffset, sourceAddressOffset, sourceAddressLastOffset, minorLoopOffset;
+  volatile void *destinationAddress, *sourceAddress;
+
+  DMA_CR |= DMA_CR_EMLM; // enable minor loop mapping
+  arm_dcache_flush_delete((void *)value, length * 2);  // important to flush cache before DMA. Otherwise, DMA will read from cache instead of memory and screen shows "snow" effects.
+
+  /* From now on, the SHIFTERS in MultiBeat mode are working correctly. Begin DMA transfer */
+  sourceAddress = (uint16_t*)value + minorLoopBytes/sizeof(uint16_t) - 1; // last 16bit address within current minor loop
+  sourceAddressOffset = -sizeof(uint16_t); // read values in reverse order
+  minorLoopOffset = 2*minorLoopBytes; // source address offset at end of minor loop to advance to next minor loop
+  sourceAddressLastOffset = minorLoopOffset - TotalSize; // source address offset at completion to reset to beginning
+  destinationAddress = (void *)&p->SHIFTBUFHWS[SHIFTNUM - 1]; // last 32bit shifter address (with reverse byte order)
+  destinationAddressOffset = -sizeof(uint32_t); // write words in reverse order
+  destinationAddressLastOffset = 0;
+
+  flexDma.TCD->SADDR = sourceAddress;
+  flexDma.TCD->SOFF = sourceAddressOffset;
+  flexDma.TCD->SLAST = sourceAddressLastOffset;
+  flexDma.TCD->DADDR = destinationAddress;
+  flexDma.TCD->DOFF = destinationAddressOffset;
+  flexDma.TCD->DLASTSGA = destinationAddressLastOffset;
+  flexDma.TCD->ATTR =
+    DMA_TCD_ATTR_SMOD(0U)
+    | DMA_TCD_ATTR_SSIZE(DMA_TCD_ATTR_SIZE_16BIT) // 16bit reads
+    | DMA_TCD_ATTR_DMOD(destinationModulo)
+    | DMA_TCD_ATTR_DSIZE(DMA_TCD_ATTR_SIZE_32BIT); // 32bit writes
+  flexDma.TCD->NBYTES_MLOFFYES = 
+    DMA_TCD_NBYTES_SMLOE
+    | DMA_TCD_NBYTES_MLOFFYES_MLOFF(minorLoopOffset)
+    | DMA_TCD_NBYTES_MLOFFYES_NBYTES(minorLoopBytes);
+    flexDma.TCD->CITER = majorLoopCount; // Current major iteration count
+    flexDma.TCD->BITER = majorLoopCount; // Starting major iteration count
+    flexDma.triggerAtHardwareEvent(hw->shifters_dma_channel[SHIFTER_DMA_REQUEST]);
+    flexDma.disableOnCompletion();
+    flexDma.interruptAtCompletion();
+    flexDma.clearComplete();
+
+    /* Start data transfer by using DMA */
+    WR_DMATransferDone = false;
+    flexDma.attachInterrupt(dmaISR);
+    flexDma.enable();
+    dmaCallback = this;
+  }
+}
+
+FASTRUN void RA8876_t41_p::dmaISR() {
+  flexDma.clearInterrupt();
+  asm volatile ("dsb"); // prevent interrupt from re-entering
+  dmaCallback->flexDma_Callback();
+}
+
+FASTRUN void RA8876_t41_p::flexDma_Callback() {
+  /* the interrupt is called when the final DMA transfer completes writing to the shifter buffers, which would generally happen while
+  data is still in the process of being shifted out from the second-to-last major iteration. In this state, all the status flags are cleared.
+  when the second-to-last major iteration is fully shifted out, the final data is transfered from the buffers into the shifters which sets all the status flags.
+  if you have only one major iteration, the status flags will be immediately set before the interrupt is called, so the while loop will be skipped. */
+  while(0 == (p->SHIFTSTAT & (1U << (SHIFTNUM-1)))) {}
+  
+  /* Wait the last multi-beat transfer to be completed. Clear the timer flag
+  before the completing of the last beat. The last beat may has been completed
+  at this point, then code would be dead in the while() below. So mask the
+  while() statement and use the software delay .*/
+  p->TIMSTAT |= (1U << 0U);
+
+  /* Wait timer flag to be set to ensure the completing of the last beat. */
+  while(0 == (p->TIMSTAT & (1U << 0U))) {}
+
+  if(MulBeatCountRemain) {
+    uint16_t value;
+
+    /* Configure FlexIO with 1-beat write configuration */
+    FlexIO_Config_SnglBeat();
+
+    /* Use polling method for data transfer */
+    for(uint32_t i=0; i<(MulBeatCountRemain); i++) {
+      value = *MulBeatDataRemain++;
+      while(0 == (p->SHIFTSTAT & (1U << 0))) {}
+      p->SHIFTBUF[0] = value >> 8;
+      while(0 == (p->SHIFTSTAT & (1U << 0))) {}
+      p->SHIFTBUF[0] = value & 0xFF;
+    }
+    p->TIMSTAT |= (1U << 0);
+    /*Wait for transfer to be completed */
+    while(0 == (p->TIMSTAT |= (1U << 0))) {}
+  }
+
+  CSHigh();
+
+  /* the for loop is probably not sufficient to complete the transfer. Shifting out all 32 bytes takes (32 beats)/(6 MHz) = 5.333 microseconds which is over 3000 CPU cycles.
+  If you really need to wait in this callback until all the data has been shifted out, the while loop is probably the correct solution and I don't think it risks an infinite loop.
+  however, it seems like a waste of time to wait here, since the process otherwise completes in the background and the shifter buffers are ready to receive new data while the transfer completes.
+  I think in most applications you could continue without waiting. You can start a new DMA transfer as soon as the first one completes (no need to wait for FlexIO to finish shifting). */
+  WR_DMATransferDone = true;
+  if(isDMACB) {
+    _onDMACompleteCB();
+  }
+}
+
+void RA8876_t41_p::DMAerror() {
+  if(flexDma.error()) {
+    Serial.print("DMA error: ");
+    Serial.println(DMA_ES, HEX);
+  } 
+}
+
+FASTRUN void RA8876_t41_p::pushPixels16bitDMA(const uint16_t * pcolors, uint16_t x1, uint16_t y1, uint16_t x2, uint16_t y2) {
+  uint32_t area = (x2)*(y2);
+  while(WR_DMATransferDone == false) {}    //Wait for any DMA transfers to complete
+
+  graphicMode(true);
+  activeWindowXY(x1,y1);
+  activeWindowWH(x2,y2);
+  setPixelCursor(x1,y1);
+  ramAccessPrepare();
+  MulBeatWR_nPrm_DMA(pcolors, area);
+}
+
+FASTRUN void RA8876_t41_p::_onCompleteCB() {
+  if(_callback) {
+    _callback();
+  }
+  return;
 }
 
 //**********************************************************************
