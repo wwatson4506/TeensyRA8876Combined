@@ -16,8 +16,8 @@
 #include "font_ComicSansMS.h"
 
 //#define USE_SPI1
-//#define USE_WRITERECT
-#define USE_PUTPICTURE
+#define USE_WRITERECT
+//#define USE_PUTPICTURE
 
 #if defined(use_spi)
 #define RA8876_CS 10
