@@ -1,5 +1,6 @@
 //**************************************************************//
-// Teensy 4.1 8080 Parallel 8/16 bit with 8 bit ASYNC support.
+// Teensy 4.1 8080 Parallel 8/16 bit with 8 bit ASYNC support and
+// 8 BIT DMA support.
 //**************************************************************//
 /*
  * Ra8876LiteTeensy.cpp
