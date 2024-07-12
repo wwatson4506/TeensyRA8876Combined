@@ -232,6 +232,24 @@ class RA8876_t41_p : public RA8876_common {
 
     void microSecondDelay();
 
+    uint16_t generate_output_word(uint8_t data) __attribute__((always_inline)) {
+        #if !defined(ARDUINO_TEENSY40)
+        return data;
+        #else
+        if (_bus_width == 8) return data;
+        return (uint16_t)(data & 0x0F) | (uint16_t)((data & 0xF0) << 2);
+        #endif
+    }
+
+    uint8_t read_shiftbuf_byte() __attribute__((always_inline)) {
+        #if !defined(ARDUINO_TEENSY40)
+        return p->SHIFTBUFBYS[3];
+        #else
+        if (_bus_width == 8) return p->SHIFTBUFBYS[3];
+        uint16_t data = p->SHIFTBUF[3] >> 16; // 10 bits but shifter does 16
+        return ((data >> 2) & 0xf0) | (data & 0xf);
+        #endif
+    }
 
   private:
     int _cs;
