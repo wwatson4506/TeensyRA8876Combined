@@ -96,9 +96,9 @@
 
 //#define BUS_WIDTH 8 /*Available options are 8 or 16 */
 #define SHIFTNUM 8  // number of shifters used (up to 8)
-#define BYTES_PER_BEAT (sizeof(uint8_t))
-#define BEATS_PER_SHIFTER (sizeof(uint32_t) / BYTES_PER_BEAT)
-#define BYTES_PER_BURST (sizeof(uint32_t) * SHIFTNUM)
+//#define BYTES_PER_BEAT (sizeof(uint8_t))
+//#define BEATS_PER_SHIFTER (sizeof(uint32_t) / BYTES_PER_BEAT)
+//#define BYTES_PER_BURST (sizeof(uint32_t) * SHIFTNUM)
 #define SHIFTER_IRQ (SHIFTNUM - 1)
 #define TIMER_IRQ 0
 #define FLEXIO_ISR_PRIORITY 64 // interrupt is timing sensitive, so use relatively high priority (supersedes USB)
@@ -202,9 +202,11 @@ class RA8876_t41_p : public RA8876_common {
     uint32_t TotalSize;
 
     /* variables used by ISR */
-    volatile uint32_t bytes_remaining;
-    volatile unsigned int bursts_to_complete;
-    volatile uint32_t *readPtr;
+    volatile uint32_t _irq_bytes_remaining;
+    volatile unsigned int _irq_bursts_to_complete;
+    volatile uint32_t *_irq_readPtr;
+    uint8_t  _irq_bytes_per_shifter;
+    uint16_t _irq_bytes_per_burst;
     uint32_t finalBurstBuffer[SHIFTNUM];
 
     void displayInit();
