@@ -779,26 +779,6 @@ FASTRUN void RA8876_t41_p::_onDMACompleteCB() {
     return;
 }
 
-// Put a picture on the screen using raw picture data
-// This is a simplified wrapper - more advanced uses (such as putting data onto a page other than current) 
-//   should use the underlying BTE functions.
-void RA8876_t41_p::putPicture(ru16 x, ru16 y, ru16 w, ru16 h, const unsigned char *data) {
-    //The putPicture_16bppData8 function in the base class is not ideal - it damages the activeWindow setting
-    //It also is harder to make it DMA.
-    //Ra8876_Lite::putPicture_16bppData8(x, y, w, h, data);
-    //Using the BTE function is faster and will use DMA if available
-  if(_bus_width == 16) {
-    bteMpuWriteWithROPData16(currentPage, width(), x, y,  //Source 1 is ignored for ROP 12
-                              currentPage, width(), x, y, w, h,     //destination address, pagewidth, x/y, width/height
-                              RA8876_BTE_ROP_CODE_12,
-                              (uint16_t *)data);
-  } else {
-    bteMpuWriteWithROPData8(currentPage, width(), x, y,  //Source 1 is ignored for ROP 12
-                              currentPage, width(), x, y, w, h,     //destination address, pagewidth, x/y, width/height
-                              RA8876_BTE_ROP_CODE_12,
-                              data);
-  }
-}
 
 FASTRUN void RA8876_t41_p::pushPixels16bitAsync(const uint16_t *pcolors, uint16_t x1, uint16_t y1, uint16_t x2, uint16_t y2) {
     while (WR_IRQTransferDone == false) {
@@ -1375,6 +1355,7 @@ void RA8876_t41_p::bteMpuWriteWithROPData8(ru32 s1_addr, ru16 s1_image_width, ru
 void RA8876_t41_p::bteMpuWriteWithROPData16(ru32 s1_addr, ru16 s1_image_width, ru16 s1_x, ru16 s1_y, ru32 des_addr, ru16 des_image_width,
                                             ru16 des_x, ru16 des_y, ru16 width, ru16 height, ru8 rop_code, const unsigned short *data) {
     ru16 i, j;
+    Serial.printf("bteMpuWriteWithROPData16(%u %u %u %u %u - %x)\n", des_x, des_y, width, height, rop_code, data);
     bteMpuWriteWithROP(s1_addr, s1_image_width, s1_x, s1_y, des_addr, des_image_width, des_x, des_y, width, height, rop_code);
 
     while (WR_IRQTransferDone == false) {
@@ -1388,6 +1369,8 @@ void RA8876_t41_p::bteMpuWriteWithROPData16(ru32 s1_addr, ru16 s1_image_width, r
             delayNanoseconds(10); // Initially setup for the T4.1 board
             if (_rotation & 1)
                 delayNanoseconds(70);
+            uint16_t pixel = *data++;
+            //p->SHIFTBUF[0] = ((pixel & 0xff)  << 8) | (pixel >> 8);
             p->SHIFTBUF[0] = *data++;
             /*Wait for transfer to be completed */
             while (0 == (p->SHIFTSTAT & (1 << 0))) {
@@ -1516,6 +1499,7 @@ void RA8876_t41_p::write16BitColor(uint16_t color) {
         while (0 == (p->SHIFTSTAT & (1 << 0))) {
         }
         p->SHIFTBUF[0] = color;
+        Serial.printf("$$16$$write16BitColor(%x)\n", color);
     }
 }
 void RA8876_t41_p::endWrite16BitColors() {
