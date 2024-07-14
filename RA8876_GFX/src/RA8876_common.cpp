@@ -1198,11 +1198,12 @@ void RA8876_common::drawPixel(ru16 x, ru16 y, ru16 color) {
     graphicMode(true);
     setPixelCursor(x, y);
     ramAccessPrepare();
-    lcdDataWrite(color);
-    lcdDataWrite(color >> 8);
-#if defined(use_lcdDataWrite16bbp)
-    lcdDataWrite16bbp(color);
-#endif
+    lcdDataWrite16(color);
+//    lcdDataWrite(color);
+//    lcdDataWrite(color >> 8);
+//#if defined(use_lcdDataWrite16bbp)
+//    lcdDataWrite16bbp(color);
+//#endif
 }
 
 void RA8876_common::readRect(int16_t x, int16_t y, int16_t w, int16_t h, uint16_t *pcolors) {
