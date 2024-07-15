@@ -47,6 +47,11 @@ void setup() {
   //Can use analogWrite() but I suggest you increase the PWM frequency first so it doesn't sing.
 //  pinMode(BACKLITE, OUTPUT);
 //  digitalWrite(BACKLITE, HIGH);
+
+  // Set 16bit mode
+//  tft.setBusWidth(16);
+  // DB5.0 WR pin, RD pin, D0 pin.
+//  tft.setFlexIOPins(53,52,40);
     
 #if(use_spi)
     tft.begin();

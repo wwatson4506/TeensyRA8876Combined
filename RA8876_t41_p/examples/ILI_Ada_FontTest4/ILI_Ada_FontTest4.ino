@@ -76,6 +76,11 @@ void setup() {
   while (!Serial && ((millis () - debug_start) <= 5000)) ;
   Serial.println("Setup");
   
+  // Set 16bit mode
+//  tft.setBusWidth(16);
+  // DB5.0 WR pin, RD pin, D0 pin.
+//  tft.setFlexIOPins(53,52,40);
+
 #if defined(use_spi)
   tft.begin(30000000);
 #else

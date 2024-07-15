@@ -89,10 +89,15 @@ void setup() {
   digitalWrite(BACKLITE, HIGH);
 #endif
     
+  // Set 16bit mode
+//  tft.setBusWidth(16);
+  // DB5.0 WR pin, RD pin, D0 pin.
+//  tft.setFlexIOPins(53,52,40);
+
 #if defined(use_spi)
   tft.begin(); 
 #else
-  tft.begin(12);// 20 is working in 8bit and 16bit mode on T41
+  tft.begin(20);// 20 is working in 8bit and 16bit mode on T41
 #endif
   tft.setCursor(0,0);
   tft.fillScreen(myColors[11]);
