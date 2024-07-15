@@ -1369,8 +1369,6 @@ void RA8876_t41_p::bteMpuWriteWithROPData16(ru32 s1_addr, ru16 s1_image_width, r
             delayNanoseconds(10); // Initially setup for the T4.1 board
             if (_rotation & 1)
                 delayNanoseconds(70);
-            uint16_t pixel = *data++;
-            //p->SHIFTBUF[0] = ((pixel & 0xff)  << 8) | (pixel >> 8);
             p->SHIFTBUF[0] = *data++;
             /*Wait for transfer to be completed */
             while (0 == (p->SHIFTSTAT & (1 << 0))) {

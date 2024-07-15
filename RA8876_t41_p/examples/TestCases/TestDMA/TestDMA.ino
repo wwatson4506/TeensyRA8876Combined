@@ -51,16 +51,30 @@ void setup() {
 
   lcd.graphicMode(true);
   lcd.setRotation(0);
+  lcd.onCompleteCB(&frame_complete_callback);
+
+}
+
+void frame_complete_callback() {
+    Serial.println("\n*** Frame Complete Callback ***");
 }
 
 void loop() {
-//  lcd.pushPixels16bitAsync(teensy41_Cardlike,10,10,575,424);
-//  lcd.pushPixels16bitAsync(flexio_teensy_mm,0,0,480,320); // 480x320
-//  lcd.pushPixels16bitAsync(teensy41,0,0,480,320); // 480x320
-//  lcd.writeRect(10,10,575,424,teensy41_Cardlike);
-//  lcd.writeRect(10,280,480,320,teensy41);
-//  lcd.writeRect(530,0,480,320,flexio_teensy_mm);
-
+#if 1    
+  lcd.fillScreen(BLUE);
+  lcd.pushPixels16bitAsync(teensy41_Cardlike,10,10,575,424);
+  waitforInput();
+  lcd.pushPixels16bitAsync(flexio_teensy_mm,0,0,480,320); // 480x320
+  waitforInput();
+  lcd.pushPixels16bitAsync(teensy41,0,0,480,320); // 480x320
+  waitforInput();
+  lcd.writeRect(10,10,575,424,teensy41_Cardlike);
+  waitforInput();
+  lcd.writeRect(10,280,480,320,teensy41);
+  waitforInput();
+  lcd.writeRect(530,0,480,320,flexio_teensy_mm);
+  waitforInput();
+#else
   lcd.fillScreen(0x0010);
   start = micros();
   lcd.pushPixels16bitDMA(teensy41,1,1,480,320);    // FLASHMEM buffer
@@ -79,6 +93,7 @@ void loop() {
   end = micros() - start;
   Serial.printf("Wrote %d bytes in %dus\n\n",480*320, end);
   waitforInput();
+#endif
 }
 
 void waitforInput()
