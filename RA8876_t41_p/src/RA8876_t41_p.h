@@ -96,9 +96,9 @@
 
 //#define BUS_WIDTH 8 /*Available options are 8 or 16 */
 #define SHIFTNUM 8  // number of shifters used (up to 8)
-#define BYTES_PER_BEAT (sizeof(uint8_t))
-#define BEATS_PER_SHIFTER (sizeof(uint32_t) / BYTES_PER_BEAT)
-#define BYTES_PER_BURST (sizeof(uint32_t) * SHIFTNUM)
+//#define BYTES_PER_BEAT (sizeof(uint8_t))
+//#define BEATS_PER_SHIFTER (sizeof(uint32_t) / BYTES_PER_BEAT)
+//#define BYTES_PER_BURST (sizeof(uint32_t) * SHIFTNUM)
 #define SHIFTER_IRQ (SHIFTNUM - 1)
 #define TIMER_IRQ 0
 #define FLEXIO_ISR_PRIORITY 64 // interrupt is timing sensitive, so use relatively high priority (supersedes USB)
@@ -153,7 +153,7 @@ class RA8876_t41_p : public RA8876_common {
                                         const unsigned short *data);
 
     /*  Picture Functions */
-	void putPicture(uint16_t x, uint16_t y, uint16_t w, uint16_t h, const unsigned char *data);
+//	void putPicture(uint16_t x, uint16_t y, uint16_t w, uint16_t h, const unsigned char *data);
     void putPicture_16bpp(ru16 x, ru16 y, ru16 width, ru16 height);                                   // not recommended: use BTE instead
     void putPicture_16bppData8(ru16 x, ru16 y, ru16 width, ru16 height, const unsigned char *data);   // not recommended: use BTE instead
     void putPicture_16bppData16(ru16 x, ru16 y, ru16 width, ru16 height, const unsigned short *data); // not recommended: use BTE instead
@@ -202,9 +202,11 @@ class RA8876_t41_p : public RA8876_common {
     uint32_t TotalSize;
 
     /* variables used by ISR */
-    volatile uint32_t bytes_remaining;
-    volatile unsigned int bursts_to_complete;
-    volatile uint32_t *readPtr;
+    volatile uint32_t _irq_bytes_remaining;
+    volatile unsigned int _irq_bursts_to_complete;
+    volatile uint32_t *_irq_readPtr;
+    uint8_t  _irq_bytes_per_shifter;
+    uint16_t _irq_bytes_per_burst;
     uint32_t finalBurstBuffer[SHIFTNUM];
 
     void displayInit();
@@ -232,6 +234,24 @@ class RA8876_t41_p : public RA8876_common {
 
     void microSecondDelay();
 
+    uint16_t generate_output_word(uint8_t data) __attribute__((always_inline)) {
+        #if !defined(ARDUINO_TEENSY40)
+        return data;
+        #else
+        if (_bus_width == 8) return data;
+        return (uint16_t)(data & 0x0F) | (uint16_t)((data & 0xF0) << 2);
+        #endif
+    }
+
+    uint8_t read_shiftbuf_byte() __attribute__((always_inline)) {
+        #if !defined(ARDUINO_TEENSY40)
+        return p->SHIFTBUFBYS[3];
+        #else
+        if (_bus_width == 8) return p->SHIFTBUFBYS[3];
+        uint16_t data = p->SHIFTBUF[3] >> 16; // 10 bits but shifter does 16
+        return ((data >> 2) & 0xf0) | (data & 0xf);
+        #endif
+    }
 
   private:
     int _cs;

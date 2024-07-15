@@ -332,13 +332,19 @@ FASTRUN void RA8876_t41_p::FlexIO_Init() {
 
     // Looks like we may not use RD pin this way...
     _flexio_RD = pFlex->mapIOPinToFlexPin(_rd_pin);
-
+    uint8_t working_bus_width = _bus_width;
     // lets dos some quick validation of the pins.
+    uint8_t previous_flexio_pin = _flexio_D0;
     for (uint8_t i = 1; i < _bus_width; i++) {
         uint8_t flexio_pin = pFlex->mapIOPinToFlexPin(_data_pins[i]);
-        if (flexio_pin != (_flexio_D0 + i)) {
-            Serial.printf("RA8876_t41_p::FlexIO_Ini - Flex IO Data pins pin issue D0(%u), D%u(%u)\n", _flexio_D0, i, flexio_pin);
+        if (flexio_pin != (previous_flexio_pin + 1)) {
+            if ((i == 4) && (flexio_pin != 0xff)) {
+                Serial.printf("\tNibble Mode: D4(%u): %u\n", _data_pins[4], flexio_pin);
+                working_bus_width = 10;
+            }
+            Serial.printf("ILI948x_t4x_p::FlexIO_Ini - Flex IO Data pins pin issue D0(%u), D%u(%u)\n", _flexio_D0, i, flexio_pin);
         }
+        previous_flexio_pin = flexio_pin;
     }
 
 
@@ -368,6 +374,9 @@ FASTRUN void RA8876_t41_p::FlexIO_Init() {
 
     /* Set clock */
     pFlex->setClockSettings(3, 1, 0); // (480 MHz source, 1+1, 1+0) >> 480/2/1 >> 240Mhz
+
+    // If we found we were T4 nibble mode update the _bus_width
+    _bus_width = working_bus_width;
 
     /* Set up pin mux */
     pFlex->setIOPinToFlexMode(_wr_pin);
@@ -590,7 +599,8 @@ FASTRUN void RA8876_t41_p::FlexIO_Config_MultiBeat() {
     flex_config = CONFIG_MULTIBEAT;
     DBGPrintf("RA8876_t41_p::FlexIO_Config_MultiBeat() - Enter\n");
 
-    uint8_t beats = SHIFTNUM * BEATS_PER_SHIFTER; // Number of beats = number of shifters * beats per shifter
+    uint8_t MulBeatWR_BeatQty = SHIFTNUM * sizeof(uint32_t) / sizeof(uint8_t); // Number of beats = number of shifters * beats per shifter
+    if (_bus_width > 8)  MulBeatWR_BeatQty = MulBeatWR_BeatQty / 2;            // we use 16 bits at a time for T4...
 
     /* Disable and reset FlexIO */
     p->CTRL &= ~FLEXIO_CTRL_FLEXEN;
@@ -629,7 +639,7 @@ FASTRUN void RA8876_t41_p::FlexIO_Config_MultiBeat() {
     }
     /* Configure the timer for shift clock */
     p->TIMCMP[0] =
-        ((beats * 2U - 1) << 8)  /* TIMCMP[15:8] = number of beats x 2 – 1 */
+        ((MulBeatWR_BeatQty * 2U - 1) << 8)  /* TIMCMP[15:8] = number of beats x 2 – 1 */
         | (_baud_div / 2U - 1U); /* TIMCMP[7:0] = shift clock divide ratio / 2 - 1 */
 
     p->TIMCFG[0] = FLEXIO_TIMCFG_TIMOUT(0U)       /* Timer output logic one when enabled and not affected by reset */
@@ -662,11 +672,13 @@ FASTRUN void RA8876_t41_p::FlexIO_Config_MultiBeat() {
     DBGPrintf("RA8876_t41_p::FlexIO_Config_MultiBeat() - Exit\n");
 }
 
+//=============================================================================
+// FlexIO IRQ - mainly for FlexIO3 which does not have DMA
 FASTRUN void RA8876_t41_p::flexIRQ_Callback() {
     if (p->TIMSTAT & (1 << TIMER_IRQ)) { // interrupt from end of burst
         p->TIMSTAT = (1 << TIMER_IRQ);   // clear timer interrupt signal
-        bursts_to_complete--;
-        if (bursts_to_complete == 0) {
+        _irq_bursts_to_complete--;
+        if ((_irq_bursts_to_complete == 0) || (_irq_bytes_remaining == 0)) {
             p->TIMIEN &= ~(1 << TIMER_IRQ); // disable timer interrupt
             asm("dsb");
             WR_IRQTransferDone = true;
@@ -677,26 +689,35 @@ FASTRUN void RA8876_t41_p::flexIRQ_Callback() {
     }
     if (p->SHIFTSTAT & (1 << SHIFTER_IRQ)) { // interrupt from empty shifter buffer
         // note, the interrupt signal is cleared automatically when writing data to the shifter buffers
-        if (bytes_remaining == 0) {                     // just started final burst, no data to load
+        if (_irq_bytes_remaining == 0) {                     // just started final burst, no data to load
             p->SHIFTSIEN &= ~(1 << SHIFTER_IRQ);        // disable shifter interrupt signal
-        } else if (bytes_remaining < BYTES_PER_BURST) { // just started second-to-last burst, load data for final burst
-            uint8_t beats = bytes_remaining / BYTES_PER_BEAT;
-            p->TIMCMP[0] = ((beats * 2U - 1) << 8) | (_baud_div / 2U - 1); // takes effect on final burst
-            readPtr = finalBurstBuffer;
-            bytes_remaining = 0;
+        } else if (_irq_bytes_remaining < _irq_bytes_per_burst) { // just started second-to-last burst, load data for final burst
+            p->TIMCMP[0] = ((_irq_bytes_remaining * 2U - 1) << 8) | (_baud_div / 2U - 1); // takes effect on final burst
+            _irq_readPtr = finalBurstBuffer;
+            _irq_bytes_remaining = 0;
             for (int i = 0; i < SHIFTNUM; i++) {
-                uint32_t data = *readPtr++;
+                uint32_t data = *_irq_readPtr++;
                 p->SHIFTBUFHWS[i] = ((data >> 16) & 0xFFFF) | ((data << 16) & 0xFFFF0000);
                 while (0 == (p->SHIFTSTAT & (1U << SHIFTER_IRQ))) {
                 }
             }
         } else {
-            bytes_remaining -= BYTES_PER_BURST;
-            for (int i = 0; i < SHIFTNUM; i++) {
-                uint32_t data = *readPtr++;
-                p->SHIFTBUFHWS[i] = ((data >> 16) & 0xFFFF) | ((data << 16) & 0xFFFF0000);
-                while (0 == (p->SHIFTSTAT & (1U << SHIFTER_IRQ))) {
+            _irq_bytes_remaining -= _irq_bytes_per_burst;
+            if (_bus_width == 8) {
+                for (int i = 0; i < SHIFTNUM; i++) {
+                    uint32_t data = *_irq_readPtr++;
+                    p->SHIFTBUFHWS[i] = ((data >> 16) & 0xFFFF) | ((data << 16) & 0xFFFF0000);
+                    while (0 == (p->SHIFTSTAT & (1U << SHIFTER_IRQ))) {
+                    }
                 }
+            } else {
+                uint8_t *pb = (uint8_t*)_irq_readPtr;
+                for (int i = SHIFTNUM - 1; i >= 0; i--) {
+                    p->SHIFTBUF[i] = (uint32_t)(generate_output_word(pb[2 * i]) << 0) | (uint32_t)(generate_output_word(pb[i * 2 + 1]) << 16);
+                }
+                pb += (2 * SHIFTNUM);
+                _irq_readPtr = (uint32_t*)pb; 
+
             }
         }
     }
@@ -716,26 +737,30 @@ FASTRUN void RA8876_t41_p::MulBeatWR_nPrm_IRQ(const void *value, uint32_t const 
 
     FlexIO_Config_MultiBeat();
     WR_IRQTransferDone = false;
+
     uint32_t bytes = length * 2U;
+    _irq_bytes_per_shifter = (_bus_width <= 8) ? 4 : 2;
+    _irq_bytes_per_burst = _irq_bytes_per_shifter * SHIFTNUM;
+
 
     CSLow();
     DCHigh();
 
-    bursts_to_complete = bytes / BYTES_PER_BURST;
+    _irq_bursts_to_complete = bytes / _irq_bytes_per_burst;
 
-    int remainder = bytes % BYTES_PER_BURST;
+    int remainder = bytes % _irq_bytes_per_burst;
     if (remainder != 0) {
         memset(finalBurstBuffer, 0, sizeof(finalBurstBuffer));
         memcpy(finalBurstBuffer, (uint8_t *)value + bytes - remainder, remainder);
-        bursts_to_complete++;
+        _irq_bursts_to_complete++;
     }
 
-    bytes_remaining = bytes;
-    readPtr = (uint32_t *)value;
-    //    Serial.printf ("arg addr: %x, readPtr addr: %x, contents: %x\n", value, readPtr, *readPtr);
-    //    Serial.printf("START::bursts_to_complete: %d bytes_remaining: %d \n", bursts_to_complete, bytes_remaining);
+    _irq_bytes_remaining = bytes;
+    _irq_readPtr = (uint32_t *)value;
+    //    Serial.printf ("arg addr: %x, _irq_readPtr addr: %x, contents: %x\n", value, _irq_readPtr, *_irq_readPtr);
+    //    Serial.printf("START::_irq_bursts_to_complete: %d _irq_bytes_remaining: %d \n", _irq_bursts_to_complete, _irq_bytes_remaining);
 
-    uint8_t beats = SHIFTNUM * BEATS_PER_SHIFTER;
+    uint8_t beats = SHIFTNUM * _irq_bytes_per_shifter;
     p->TIMCMP[0] = ((beats * 2U - 1) << 8) | (_baud_div / 2U - 1U);
     p->TIMSTAT = (1 << TIMER_IRQ); // clear timer interrupt signal
 
@@ -754,26 +779,6 @@ FASTRUN void RA8876_t41_p::_onDMACompleteCB() {
     return;
 }
 
-// Put a picture on the screen using raw picture data
-// This is a simplified wrapper - more advanced uses (such as putting data onto a page other than current) 
-//   should use the underlying BTE functions.
-void RA8876_t41_p::putPicture(ru16 x, ru16 y, ru16 w, ru16 h, const unsigned char *data) {
-    //The putPicture_16bppData8 function in the base class is not ideal - it damages the activeWindow setting
-    //It also is harder to make it DMA.
-    //Ra8876_Lite::putPicture_16bppData8(x, y, w, h, data);
-    //Using the BTE function is faster and will use DMA if available
-  if(_bus_width == 16) {
-    bteMpuWriteWithROPData16(currentPage, width(), x, y,  //Source 1 is ignored for ROP 12
-                              currentPage, width(), x, y, w, h,     //destination address, pagewidth, x/y, width/height
-                              RA8876_BTE_ROP_CODE_12,
-                              (uint16_t *)data);
-  } else {
-    bteMpuWriteWithROPData8(currentPage, width(), x, y,  //Source 1 is ignored for ROP 12
-                              currentPage, width(), x, y, w, h,     //destination address, pagewidth, x/y, width/height
-                              RA8876_BTE_ROP_CODE_12,
-                              data);
-  }
-}
 
 FASTRUN void RA8876_t41_p::pushPixels16bitAsync(const uint16_t *pcolors, uint16_t x1, uint16_t y1, uint16_t x2, uint16_t y2) {
     while (WR_IRQTransferDone == false) {
@@ -884,9 +889,9 @@ FASTRUN void RA8876_t41_p::MulBeatWR_nPrm_DMA(const void *value, uint32_t const 
     for(uint32_t i=0; i<length; i++) {
         buf = *newValue++;
           while(0 == (p->SHIFTSTAT & (1U << 0))) {}
-          p->SHIFTBUF[0] = buf >> 8;
+          p->SHIFTBUF[0] = generate_output_word(buf >> 8);
           while(0 == (p->SHIFTSTAT & (1U << 0))) {}
-          p->SHIFTBUF[0] = buf & 0xFF;
+          p->SHIFTBUF[0] = generate_output_word(buf & 0xFF);
     }        
     //Wait for transfer to be completed 
     while(0 == (p->TIMSTAT & (1U << 0))) {}
@@ -981,9 +986,9 @@ FASTRUN void RA8876_t41_p::flexDma_Callback() {
     for(uint32_t i=0; i<(MulBeatCountRemain); i++) {
       value = *MulBeatDataRemain++;
       while(0 == (p->SHIFTSTAT & (1U << 0))) {}
-      p->SHIFTBUF[0] = value >> 8;
+      p->SHIFTBUF[0] = generate_output_word(value >> 8);
       while(0 == (p->SHIFTSTAT & (1U << 0))) {}
-      p->SHIFTBUF[0] = value & 0xFF;
+      p->SHIFTBUF[0] = generate_output_word(value & 0xFF);
     }
     p->TIMSTAT |= (1U << 0);
     /*Wait for transfer to be completed */
@@ -1049,7 +1054,7 @@ void RA8876_t41_p::lcdRegWrite(ru8 reg, bool finalize) {
     CSLow();
     DCLow();
     /* Write command index */
-    p->SHIFTBUF[0] = reg;
+    p->SHIFTBUF[0] = generate_output_word(reg);
     /*Wait for transfer to be completed */
     while (0 == (p->SHIFTSTAT & (1 << 0))) {
     }
@@ -1073,7 +1078,7 @@ void RA8876_t41_p::lcdDataWrite(ru8 data, bool finalize) {
     CSLow();
     DCHigh();
 
-    p->SHIFTBUF[0] = data;
+    p->SHIFTBUF[0] = generate_output_word(data);
     /*Wait for transfer to be completed */
     while (0 == (p->SHIFTSTAT & (1 << 0))) {
     }
@@ -1102,10 +1107,13 @@ ru8 RA8876_t41_p::lcdDataRead(bool finalize) {
 
     while (0 == (p->SHIFTSTAT & (1 << 3))) {
     }
-    dummy = p->SHIFTBUFBYS[3];
+    dummy = read_shiftbuf_byte();
     while (0 == (p->SHIFTSTAT & (1 << 3))) {
     }
-    data = p->SHIFTBUFBYS[3];
+    if (_bus_width != 16)
+        data = read_shiftbuf_byte();
+    else
+        data = (p->SHIFTBUFBYS[3] >> 8) & 0xff;
 
     RDHigh(); // Set RD pin high manually
 
@@ -1115,10 +1123,7 @@ ru8 RA8876_t41_p::lcdDataRead(bool finalize) {
 
     // Set FlexIO back to Write mode
     FlexIO_Config_SnglBeat(); // Not sure if this is needed.
-    if (_bus_width == 8)
-        return data;
-    else
-        return (data >> 8) & 0xff;
+    return data;
 }
 
 //**************************************************************//
@@ -1141,7 +1146,10 @@ ru8 RA8876_t41_p::lcdStatusRead(bool finalize) {
     uint16_t data = 0;
     while (0 == (p->SHIFTSTAT & (1 << 3))) {
     }
-    data = p->SHIFTBUFBYS[3];
+    if (_bus_width != 16)
+        data = read_shiftbuf_byte();
+    else
+        data = (p->SHIFTBUFBYS[3] >> 8) & 0xff;
 
     DCHigh();
     CSHigh();
@@ -1151,10 +1159,7 @@ ru8 RA8876_t41_p::lcdStatusRead(bool finalize) {
     // Set FlexIO back to Write mode
     FlexIO_Config_SnglBeat();
 
-    if (_bus_width == 8)
-        return data;
-    else
-        return (data >> 8) & 0xff;
+    return data;
 }
 
 //**************************************************************//
@@ -1180,7 +1185,7 @@ ru8 RA8876_t41_p::lcdRegDataRead(ru8 reg, bool finalize) {
 //******************************************************************
 void RA8876_t41_p::lcdDataWrite16bbp(ru16 data, bool finalize) {
     //  while(digitalReadFast(WINT) == 0);  // If monitoring XnWAIT signal from RA8876.
-    if (_bus_width == 8) {
+    if (_bus_width != 16) {
         lcdDataWrite(data & 0xff);
         lcdDataWrite(data >> 8);
     } else {
@@ -1208,10 +1213,10 @@ void RA8876_t41_p::lcdDataWrite16(uint16_t data, bool finalize) {
         while (0 == (p->TIMSTAT & (1 << 0))) {
         }
     } else {
-        p->SHIFTBUF[0] = data >> 8;
+        p->SHIFTBUF[0] = generate_output_word(data >> 8);
         while (0 == (p->SHIFTSTAT & (1 << 0))) {
         }
-        p->SHIFTBUF[0] = data & 0xff;
+        p->SHIFTBUF[0] = generate_output_word(data & 0xff);
         while (0 == (p->SHIFTSTAT & (1 << 0))) {
         }
         while (0 == (p->TIMSTAT & (1 << 0))) {
@@ -1251,13 +1256,13 @@ void RA8876_t41_p::putPicture_16bppData8(ru16 x, ru16 y, ru16 width, ru16 height
     for (j = 0; j < height; j++) {
         for (i = 0; i < width; i++) {
             delayNanoseconds(10); // Initially setup for the dev board v4.0
-            p->SHIFTBUF[0] = *data++;
+            p->SHIFTBUF[0] = generate_output_word(*data++);
             /*Wait for transfer to be completed */
             while (0 == (p->SHIFTSTAT & (1 << 0))) {
             }
             while (0 == (p->TIMSTAT & (1 << 0))) {
             }
-            p->SHIFTBUF[0] = *data++;
+            p->SHIFTBUF[0] = generate_output_word(*data++);
             /*Wait for transfer to be completed */
             while (0 == (p->SHIFTSTAT & (1 << 0))) {
             }
@@ -1288,7 +1293,7 @@ void RA8876_t41_p::putPicture_16bppData16(ru16 x, ru16 y, ru16 width, ru16 heigh
     for (j = 0; j < height; j++) {
         for (i = 0; i < width; i++) {
             delayNanoseconds(25); // Initially setup for the dev board v4.0
-            p->SHIFTBUF[0] = *data++;
+            p->SHIFTBUF[0] = generate_output_word(*data++);
             /*Wait for transfer to be completed */
             while (0 == (p->SHIFTSTAT & (1 << 0))) {
             }
@@ -1323,13 +1328,13 @@ void RA8876_t41_p::bteMpuWriteWithROPData8(ru32 s1_addr, ru16 s1_image_width, ru
             delayNanoseconds(10); // Initially setup for the T4.1 board
             if (_rotation & 1)
                 delayNanoseconds(20);
-            p->SHIFTBUF[0] = *data++;
+            p->SHIFTBUF[0] = generate_output_word(*data++);
             // Wait for transfer to be completed
             while (0 == (p->SHIFTSTAT & (1 << 0))) {
             }
             while (0 == (p->TIMSTAT & (1 << 0))) {
             }
-            p->SHIFTBUF[0] = *data++;
+            p->SHIFTBUF[0] = generate_output_word(*data++);
             // Wait for transfer to be completed
             while (0 == (p->SHIFTSTAT & (1 << 0))) {
             }
@@ -1350,6 +1355,7 @@ void RA8876_t41_p::bteMpuWriteWithROPData8(ru32 s1_addr, ru16 s1_image_width, ru
 void RA8876_t41_p::bteMpuWriteWithROPData16(ru32 s1_addr, ru16 s1_image_width, ru16 s1_x, ru16 s1_y, ru32 des_addr, ru16 des_image_width,
                                             ru16 des_x, ru16 des_y, ru16 width, ru16 height, ru8 rop_code, const unsigned short *data) {
     ru16 i, j;
+    DBGPrintf("bteMpuWriteWithROPData16(%u %u %u %u %u - %x)\n", des_x, des_y, width, height, rop_code, data);
     bteMpuWriteWithROP(s1_addr, s1_image_width, s1_x, s1_y, des_addr, des_image_width, des_x, des_y, width, height, rop_code);
 
     while (WR_IRQTransferDone == false) {
@@ -1416,13 +1422,13 @@ void RA8876_t41_p::bteMpuWriteWithChromaKeyData8(ru32 des_addr, ru16 des_image_w
             // delayNanoseconds(70);  // Initially setup for the dev board v4.0
             if (_rotation & 1)
                 delayNanoseconds(20);
-            p->SHIFTBUF[0] = *data++;
+            p->SHIFTBUF[0] = generate_output_word(*data++);
             // Wait for transfer to be completed
             while (0 == (p->SHIFTSTAT & (1 << 0))) {
             }
             while (0 == (p->TIMSTAT & (1 << 0))) {
             }
-            p->SHIFTBUF[0] = *data++;
+            p->SHIFTBUF[0] = generate_output_word(*data++);
             // Wait for transfer to be completed
             while (0 == (p->SHIFTSTAT & (1 << 0))) {
             }
@@ -1479,18 +1485,19 @@ void RA8876_t41_p::write16BitColor(uint16_t color) {
     if (_rotation & 1)
         delayNanoseconds(20);
 
-    if (_bus_width == 8) {
+    if (_bus_width != 16) {
         while (0 == (p->SHIFTSTAT & (1 << 0))) {
         }
-        p->SHIFTBUF[0] = color & 0xff;
+        p->SHIFTBUF[0] = generate_output_word(color & 0xff);
 
         while (0 == (p->SHIFTSTAT & (1 << 0))) {
         }
-        p->SHIFTBUF[0] = color >> 8;
+        p->SHIFTBUF[0] = generate_output_word(color >> 8);
     } else {
         while (0 == (p->SHIFTSTAT & (1 << 0))) {
         }
         p->SHIFTBUF[0] = color;
+        DBGPrintf("$$16$$write16BitColor(%x)\n", color);
     }
 }
 void RA8876_t41_p::endWrite16BitColors() {
