@@ -132,6 +132,7 @@ class RA8876_t41_p : public RA8876_common {
     void lcdDataWrite(ru8 data, bool finalize = true);
     ru8 lcdDataRead(bool finalize = true);
     ru8 lcdStatusRead(bool finalize = true);
+	ru16 lcdDataRead16(bool finalize = true);
     void lcdRegDataWrite(ru8 reg, ru8 data, bool finalize = true);
     ru8 lcdRegDataRead(ru8 reg, bool finalize = true);
     void lcdDataWrite16bbp(ru16 data, bool finalize = true);

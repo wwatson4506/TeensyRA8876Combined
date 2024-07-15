@@ -1126,6 +1126,35 @@ ru8 RA8876_t41_p::lcdDataRead(bool finalize) {
     return data;
 }
 
+ru16 RA8876_t41_p::lcdDataRead16(bool finalize) {
+    uint16_t dummy __attribute__((unused)) = 0;
+    uint16_t data = 0;
+
+    while (WR_IRQTransferDone == false) {
+    } // Wait for any IRQ transfers to complete
+    FlexIO_Config_SnglBeat_Read();
+
+    CSLow();  // Must to go low after config above.
+    DCHigh(); // Set HIGH for data read
+    RDLow(); // Set RD pin low manually
+
+    while (0 == (p->SHIFTSTAT & (1 << 3))) {
+    }
+    dummy = p->SHIFTBUFBYS[3];
+    while (0 == (p->SHIFTSTAT & (1 << 3))) {
+    }
+    data = p->SHIFTBUFBYS[3];
+
+    RDHigh(); // Set RD pin high manually
+    CSHigh();
+
+    //Serial.printf("lcdDataread(): Dummy 0x%4.4x, data 0x%4.4x\n", dummy, data);
+
+    // Set FlexIO back to Write mode
+    FlexIO_Config_SnglBeat(); // Not sure if this is needed.
+    return ((data >> 8) & 0x00FF) | ((data << 8) & 0xFF00);
+}
+
 //**************************************************************//
 // Read RA8876 status register 8bit data R/W only. 8/16 bit bus.
 // Special case for status register access:
