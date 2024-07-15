@@ -1355,7 +1355,7 @@ void RA8876_t41_p::bteMpuWriteWithROPData8(ru32 s1_addr, ru16 s1_image_width, ru
 void RA8876_t41_p::bteMpuWriteWithROPData16(ru32 s1_addr, ru16 s1_image_width, ru16 s1_x, ru16 s1_y, ru32 des_addr, ru16 des_image_width,
                                             ru16 des_x, ru16 des_y, ru16 width, ru16 height, ru8 rop_code, const unsigned short *data) {
     ru16 i, j;
-    Serial.printf("bteMpuWriteWithROPData16(%u %u %u %u %u - %x)\n", des_x, des_y, width, height, rop_code, data);
+    DBGPrintf("bteMpuWriteWithROPData16(%u %u %u %u %u - %x)\n", des_x, des_y, width, height, rop_code, data);
     bteMpuWriteWithROP(s1_addr, s1_image_width, s1_x, s1_y, des_addr, des_image_width, des_x, des_y, width, height, rop_code);
 
     while (WR_IRQTransferDone == false) {
@@ -1497,7 +1497,7 @@ void RA8876_t41_p::write16BitColor(uint16_t color) {
         while (0 == (p->SHIFTSTAT & (1 << 0))) {
         }
         p->SHIFTBUF[0] = color;
-        Serial.printf("$$16$$write16BitColor(%x)\n", color);
+        DBGPrintf("$$16$$write16BitColor(%x)\n", color);
     }
 }
 void RA8876_t41_p::endWrite16BitColors() {
