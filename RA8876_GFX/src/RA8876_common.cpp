@@ -1186,8 +1186,12 @@ ru16 RA8876_common::getPixel(ru16 x, ru16 y) {
     setPixelCursor(x, y); // set memory address
     ramAccessPrepare();   // Setup SDRAM Access
     dummy = lcdDataRead();
-    rdata = (lcdDataRead() & 0xff); // read low byte
-    rdata |= lcdDataRead() << 8;    // add high byte
+    if(_bus_width == 16) {
+      rdata = lcdDataRead16();
+    } else {
+      rdata = (lcdDataRead() & 0xff); // read low byte
+      rdata |= lcdDataRead() << 8;    // add high byte
+    }
     return rdata;
 }
 
