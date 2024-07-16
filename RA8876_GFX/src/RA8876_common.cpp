@@ -1535,19 +1535,28 @@ void RA8876_common::CGRAM_Start_address(uint32_t Addr) {
 //********************************************************************//
 void RA8876_common::CGRAM_initial(uint32_t charAddr, const uint8_t *data, uint16_t count) {
     uint16_t i;
+    uint16_t tmp = 0;
 
     graphicMode(true); // switch to graphic mode
-
     lcdRegWrite(RA8876_AW_COLOR);                                                  // 5Eh
     lcdDataWrite(RA8876_CANVAS_LINEAR_MODE << 2 | RA8876_CANVAS_COLOR_DEPTH_8BPP); // set memory to 8bpp and linear mode
     linearAddressSet(charAddr);                                                    // Set linear address (32 bit)
     // Set the start address for User Define Font, and write data.
     ramAccessPrepare();
-    for (i = 0; i < count; i++) {
-        checkWriteFifoNotFull();
-        lcdDataWrite(*data);
-        data++;
-    }
+    if(_bus_width == 8) {
+		for (i = 0; i < count; i++) {
+			checkWriteFifoNotFull();
+			lcdDataWrite(*data);
+			data++;
+		}
+	} else {
+		for (i = 0; i < count/2; i++) {
+			checkWriteFifoNotFull();
+			tmp = (*data++ & 0xff);
+			tmp |= (*data++ << 8);
+			lcdDataWrite16(tmp);
+		}
+	}
     checkWriteFifoEmpty(); // If high speed mcu and without Xnwait check
 
     lcdRegWrite(RA8876_AW_COLOR); // 5Eh
