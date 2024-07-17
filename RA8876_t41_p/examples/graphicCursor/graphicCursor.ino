@@ -54,6 +54,10 @@ uint8_t rst = 12;
 RA8876_t41_p tft = RA8876_t41_p(dc,cs,rst); //(dc, cs, rst)
 #endif
 
+#define LEFT_MOUSE_BUTTON 1
+#define RIGHT_MOUSE_BUTTON 2
+#define MIDDLE_MOUSE_BUTTON 4
+
 USBHost myusb;
 USBHub hub1(myusb);
 USBHub hub2(myusb);
@@ -65,6 +69,7 @@ USBHub hub2(myusb);
 // the mouse will not be claimed.
 //************************************************************* 
 KeyboardController keyboard1(myusb); // Not used.
+KeyboardController keyboard2(myusb);
 MouseController mouse1(myusb);
 USBHIDParser hid1(myusb); // Needed for USB mouse.
 USBHIDParser hid2(myusb); // Needed for use with wireless keyboard/mouse combo.
@@ -139,7 +144,6 @@ bool mouseEvent(void) {
   mouse_msg.wheel = (int8_t)mouse1.getWheel(); // Check for wheel movement
   mouse_msg.wheelH = (int8_t)mouse1.getWheelH();
   scaleMouseXY();
-  mouse1.mouseDataClear();
   return true;
 }
 
@@ -149,6 +153,35 @@ uint8_t getMouseButtons(void) {
   return mouse_msg.buttons;
 }
 
+void countMouseClicks(uint8_t button) {
+	uint8_t clickCount = 0;
+	uint32_t timerStart = 0;
+	uint32_t timeOut = 375;
+	bool getOut = false;
+
+    button &= 0x07; // Mask off three buttons
+	while(!getOut) {
+		// Check for Left mouse button double click.
+		if((getMouseButtons() & button)) {
+			if(clickCount == 0) {
+				mouse_msg.snglClickCnt++;
+				timerStart = millis(); 
+			}
+			clickCount++;
+			if(clickCount >= 2) {
+				clickCount = 0;
+				mouse_msg.dblClickCnt++;
+				getOut = true;
+			}
+			// This is blocking!!!!
+			while(getMouseButtons() & button) delay(1);
+		}
+		if(((millis()-timerStart) > timeOut) || (getOut == true))
+			break;
+	}
+}
+
+/*
 // A simple routine to detect for mouse button double clicks.
 // Single clicks will also be recorded even if a double click is
 // detected but can be ignored if needed. 
@@ -178,7 +211,7 @@ void countMouseClicks(void) {
       break; // Nothing happened getOut
   }
 }
-
+*/
 // Check for a double left mouse button click
 uint8_t getDblClick(void) {
   uint8_t dClick = mouse_msg.dblClickCnt;
@@ -214,9 +247,9 @@ void setup() {
 //  analogWrite(BACKLITE, 40);
 
   // Set 16bit mode
-//  tft.setBusWidth(16);
+  tft.setBusWidth(16);
   // DB5.0 WR pin, RD pin, D0 pin.
-//  tft.setFlexIOPins(53,52,40);
+  tft.setFlexIOPins(53,52,40);
 
 #if defined(use_spi)
   tft.begin(); 
@@ -251,10 +284,14 @@ void loop() {
     tft.printf("Buttons: %d\n", getMouseButtons());
     tft.printf("Wheel: %2d\n", mouse_msg.wheel);
     tft.printf("WheelH: %2d\n", mouse_msg.wheelH);
-    countMouseClicks();
+
+	countMouseClicks(LEFT_MOUSE_BUTTON); // ***** This method is blocking *****
+
     scCount += getSnglClick(); // Add to Single Click Count.
     dcCount += getDblClick(); // Add to Double Click Count.
     tft.printf("Single Clicks: %d\n", scCount);
     tft.printf("Double Clicks: %d\n", dcCount);
+
+    mouse1.mouseDataClear();
   }	
 }
