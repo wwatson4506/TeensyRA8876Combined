@@ -793,7 +793,7 @@ FASTRUN void RA8876_t41_p::pushPixels16bitAsync(const uint16_t *pcolors, uint16_
 }
 
 //----------------------------------------------------------------------
-// 8 BIT DMA STUFF starts here
+// 8/16 BIT DMA STUFF starts here
 //----------------------------------------------------------------------
 FASTRUN void RA8876_t41_p::FlexIO_Config_DMA_MultiBeat()
 {
@@ -803,7 +803,7 @@ FASTRUN void RA8876_t41_p::FlexIO_Config_DMA_MultiBeat()
     DBGPrintf("RA8876_t41_p::FlexIO_Config_DMA_MultiBeat() - Enter\n");
 
     uint32_t i;
-    uint8_t MulBeatWR_BeatQty = SHIFTNUM * sizeof(uint32_t) / sizeof(uint8_t);   //Number of beats = number of shifters * beats per shifter
+    uint8_t MulBeatWR_BeatQty = SHIFTNUM * sizeof(uint32_t) / _bus_width * 8;   //Number of beats = number of shifters * beats per shifter
 
     /* Disable and reset FlexIO */
     p->CTRL &= ~FLEXIO_CTRL_FLEXEN;
@@ -874,9 +874,11 @@ DMAChannel RA8876_t41_p::flexDma;
 
 FASTRUN void RA8876_t41_p::MulBeatWR_nPrm_DMA(const void *value, uint32_t const length) 
 {
+
   while(WR_DMATransferDone == false) {}  //Wait for any DMA transfers to complete
 
-  uint32_t BeatsPerMinLoop = SHIFTNUM * sizeof(uint32_t) / sizeof(uint8_t);   // Number of shifters * number of 8 bit values per shifter
+  uint8_t BeatsPerMinLoop = SHIFTNUM * sizeof(uint32_t) / _bus_width * 8; // Number of shifters * number of 8 bit values per shifter
+
   uint32_t majorLoopCount, minorLoopBytes;
   uint32_t destinationModulo = 31-(__builtin_clz(SHIFTNUM*sizeof(uint32_t))); // defines address range for circular DMA destination buffer 
 
@@ -978,7 +980,6 @@ FASTRUN void RA8876_t41_p::flexDma_Callback() {
 
   if(MulBeatCountRemain) {
     uint16_t value;
-
     /* Configure FlexIO with 1-beat write configuration */
     FlexIO_Config_SnglBeat();
 
