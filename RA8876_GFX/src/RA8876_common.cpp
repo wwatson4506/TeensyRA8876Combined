@@ -1207,9 +1207,9 @@ void RA8876_common::drawPixel(ru16 x, ru16 y, ru16 color) {
     } else {
       lcdDataWrite(color);
       lcdDataWrite(color >> 8);
-#if defined(use_lcdDataWrite16bbp)
-      lcdDataWrite16bbp(color);
-#endif
+//#if defined(use_lcdDataWrite16bbp)
+//      lcdDataWrite16bbp(color);
+//#endif
     }
 }
 
