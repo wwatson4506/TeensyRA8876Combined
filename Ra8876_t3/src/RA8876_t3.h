@@ -93,6 +93,8 @@ class RA8876_t3 : public RA8876_common {
     boolean begin(uint32_t spi_clock = SPIspeed);
 
     /*access*/
+    //dummy
+    ru16 lcdDataRead16(bool finalize = true) { return 0; };
     void lcdRegWrite(ru8 reg, bool finalize = true);
     void lcdDataWrite(ru8 data, bool finalize = true);
     ru8 lcdDataRead(bool finalize = true);
