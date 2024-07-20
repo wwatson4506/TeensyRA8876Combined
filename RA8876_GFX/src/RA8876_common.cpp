@@ -1202,15 +1202,12 @@ void RA8876_common::drawPixel(ru16 x, ru16 y, ru16 color) {
     graphicMode(true);
     setPixelCursor(x, y);
     ramAccessPrepare();
-    if(_bus_width == 16) {
-      lcdDataWrite16(color);
-    } else {
-      lcdDataWrite(color);
-      lcdDataWrite(color >> 8);
+    lcdDataWrite16(color);
+//    lcdDataWrite(color);
+//    lcdDataWrite(color >> 8);
 //#if defined(use_lcdDataWrite16bbp)
-//      lcdDataWrite16bbp(color);
+//    lcdDataWrite16bbp(color);
 //#endif
-    }
 }
 
 void RA8876_common::readRect(int16_t x, int16_t y, int16_t w, int16_t h, uint16_t *pcolors) {
@@ -1539,8 +1536,9 @@ void RA8876_common::CGRAM_Start_address(uint32_t Addr) {
 void RA8876_common::CGRAM_initial(uint32_t charAddr, const uint8_t *data, uint16_t count) {
     uint16_t i;
     uint16_t tmp = 0;
-
+    
     graphicMode(true); // switch to graphic mode
+
     lcdRegWrite(RA8876_AW_COLOR);                                                  // 5Eh
     lcdDataWrite(RA8876_CANVAS_LINEAR_MODE << 2 | RA8876_CANVAS_COLOR_DEPTH_8BPP); // set memory to 8bpp and linear mode
     linearAddressSet(charAddr);                                                    // Set linear address (32 bit)
