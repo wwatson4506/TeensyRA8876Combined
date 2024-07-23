@@ -598,11 +598,9 @@ FASTRUN void RA8876_t41_p::FlexIO_Config_MultiBeat() {
         return;
     flex_config = CONFIG_MULTIBEAT;
     DBGPrintf("RA8876_t41_p::FlexIO_Config_MultiBeat() - Enter\n");
-
-    uint8_t MulBeatWR_BeatQty = SHIFTNUM * sizeof(uint32_t) / sizeof(uint8_t); // Number of beats = number of shifters * beats per shifter
-//    uint8_t MulBeatWR_BeatQty = SHIFTNUM * sizeof(uint32_t) / _bus_width * 8; // Number of beats = number of shifters * beats per shifter
-
-    if (_bus_width > 8)  MulBeatWR_BeatQty = MulBeatWR_BeatQty / 2;            // we use 16 bits at a time for T4...
+	// Number of beats = number of shifters * beats per shifter * 8.
+	// 32 beats in 8-bit mode and 16 beats in 16-bit mode.
+    uint8_t MulBeatWR_BeatQty = SHIFTNUM * sizeof(uint32_t) / _bus_width * 8;
 
     /* Disable and reset FlexIO */
     p->CTRL &= ~FLEXIO_CTRL_FLEXEN;
@@ -641,7 +639,7 @@ FASTRUN void RA8876_t41_p::FlexIO_Config_MultiBeat() {
     }
     /* Configure the timer for shift clock */
     p->TIMCMP[0] =
-        ((MulBeatWR_BeatQty * 2U - 1) << 8)  /* TIMCMP[15:8] = number of beats x 2 – 1 */
+        ((MulBeatWR_BeatQty * 2U - 1U) << 8)  /* TIMCMP[15:8] = number of beats x 2 – 1 */
         | (_baud_div / 2U - 1U); /* TIMCMP[7:0] = shift clock divide ratio / 2 - 1 */
 
     p->TIMCFG[0] = FLEXIO_TIMCFG_TIMOUT(0U)       /* Timer output logic one when enabled and not affected by reset */
@@ -689,6 +687,7 @@ FASTRUN void RA8876_t41_p::flexIRQ_Callback() {
             return;
         }
     }
+
     if (p->SHIFTSTAT & (1 << SHIFTER_IRQ)) { // interrupt from empty shifter buffer
         // note, the interrupt signal is cleared automatically when writing data to the shifter buffers
         if (_irq_bytes_remaining == 0) {                     // just started final burst, no data to load
@@ -704,22 +703,12 @@ FASTRUN void RA8876_t41_p::flexIRQ_Callback() {
                 }
             }
         } else {
-            _irq_bytes_remaining -= _irq_bytes_per_burst;
-            if (_bus_width == 8) {
-                for (int i = 0; i < SHIFTNUM; i++) {
-                    uint32_t data = *_irq_readPtr++;
-                    p->SHIFTBUFHWS[i] = ((data >> 16) & 0xFFFF) | ((data << 16) & 0xFFFF0000);
-                    while (0 == (p->SHIFTSTAT & (1U << SHIFTER_IRQ))) {
-                    }
+			_irq_bytes_remaining -= _irq_bytes_per_burst;
+            for (int i = 0; i < SHIFTNUM; i++) {
+                uint32_t data = *_irq_readPtr++;
+                p->SHIFTBUFHWS[i] = ((data >> 16) & 0xFFFF) | ((data << 16) & 0xFFFF0000);
+                while (0 == (p->SHIFTSTAT & (1U << SHIFTER_IRQ))) {
                 }
-            } else {
-                uint8_t *pb = (uint8_t*)_irq_readPtr;
-                for (int i = SHIFTNUM - 1; i >= 0; i--) {
-                    p->SHIFTBUF[i] = (uint32_t)(generate_output_word(pb[2 * i]) << 0) | (uint32_t)(generate_output_word(pb[i * 2 + 1]) << 16);
-                }
-                pb += (2 * SHIFTNUM);
-                _irq_readPtr = (uint32_t*)pb; 
-
             }
         }
     }
@@ -734,6 +723,7 @@ FASTRUN void RA8876_t41_p::ISR() {
 RA8876_t41_p *RA8876_t41_p::IRQcallback = nullptr;
 
 FASTRUN void RA8876_t41_p::MulBeatWR_nPrm_IRQ(const void *value, uint32_t const length) {
+
     while (WR_IRQTransferDone == false) {
     } // Wait for any IRQ transfers to complete
 
@@ -742,9 +732,9 @@ FASTRUN void RA8876_t41_p::MulBeatWR_nPrm_IRQ(const void *value, uint32_t const 
 
     uint32_t bytes = length * 2U;
     _irq_bytes_per_shifter = (_bus_width <= 8) ? 4 : 2;
-    _irq_bytes_per_burst = _irq_bytes_per_shifter * SHIFTNUM;
-
-
+	// Need to multiply _irq_bytes_per_burst by 2 in 16-bit mode to get 32 bytes per burst.
+    _irq_bytes_per_burst = (_bus_width <= 8) ? _irq_bytes_per_shifter * SHIFTNUM :
+											_irq_bytes_per_shifter * SHIFTNUM * 2;
     CSLow();
     DCHigh();
 
@@ -757,10 +747,10 @@ FASTRUN void RA8876_t41_p::MulBeatWR_nPrm_IRQ(const void *value, uint32_t const 
         _irq_bursts_to_complete++;
     }
 
-    _irq_bytes_remaining = bytes;
+    _irq_bytes_remaining = bytes+32; // Need to add 32 to get remaining burst.
     _irq_readPtr = (uint32_t *)value;
-    //    Serial.printf ("arg addr: %x, _irq_readPtr addr: %x, contents: %x\n", value, _irq_readPtr, *_irq_readPtr);
-    //    Serial.printf("START::_irq_bursts_to_complete: %d _irq_bytes_remaining: %d \n", _irq_bursts_to_complete, _irq_bytes_remaining);
+        //Serial.printf ("arg addr: %x, _irq_readPtr addr: %x, contents: %x\n", value, _irq_readPtr, *_irq_readPtr);
+        //Serial.printf("START::_irq_bursts_to_complete: %d _irq_bytes_remaining: %d \n", _irq_bursts_to_complete, _irq_bytes_remaining);
 
     uint8_t beats = SHIFTNUM * _irq_bytes_per_shifter;
     p->TIMCMP[0] = ((beats * 2U - 1) << 8) | (_baud_div / 2U - 1U);
@@ -844,9 +834,8 @@ FASTRUN void RA8876_t41_p::FlexIO_Config_DMA_MultiBeat()
     }
 
     /* Configure the timer for shift clock */
-    p->TIMCMP[0] = 
-        ((MulBeatWR_BeatQty * 2U - 1) << 8)                                       /* TIMCMP[15:8] = number of beats x 2 – 1 */
-      | (_baud_div/2U - 1U);                                                       /* TIMCMP[7:0] = shift clock divide ratio / 2 - 1 */
+    p->TIMCMP[0] = ((MulBeatWR_BeatQty * 2U - 1U) << 8)                            /* TIMCMP[15:8] = number of beats x 2 – 1 */
+      | (_baud_div / 2U - 1U);                                                      /* TIMCMP[7:0] = shift clock divide ratio / 2 - 1 */
       
     p->TIMCFG[0] =   FLEXIO_TIMCFG_TIMOUT(0U)                                     /* Timer output logic one when enabled and not affected by reset */
       | FLEXIO_TIMCFG_TIMDEC(0U)                                                  /* Timer decrement on FlexIO clock, shift clock equals timer output */
