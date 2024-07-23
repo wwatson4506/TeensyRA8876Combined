@@ -600,6 +600,8 @@ FASTRUN void RA8876_t41_p::FlexIO_Config_MultiBeat() {
     DBGPrintf("RA8876_t41_p::FlexIO_Config_MultiBeat() - Enter\n");
 
     uint8_t MulBeatWR_BeatQty = SHIFTNUM * sizeof(uint32_t) / sizeof(uint8_t); // Number of beats = number of shifters * beats per shifter
+//    uint8_t MulBeatWR_BeatQty = SHIFTNUM * sizeof(uint32_t) / _bus_width * 8; // Number of beats = number of shifters * beats per shifter
+
     if (_bus_width > 8)  MulBeatWR_BeatQty = MulBeatWR_BeatQty / 2;            // we use 16 bits at a time for T4...
 
     /* Disable and reset FlexIO */
