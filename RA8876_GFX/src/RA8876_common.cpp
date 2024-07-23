@@ -150,8 +150,6 @@ void RA8876_common::setBusWidth(uint16_t buswidth) {
 //**************************************************************//
 boolean RA8876_common::ra8876Initialize() {
 
-//    RA8876_SW_Reset();
-
     // Init PLL
     if (!ra8876PllInitial())
         return false;
@@ -209,6 +207,8 @@ boolean RA8876_common::ra8876Initialize() {
     lcdVerticalNonDisplay(VND);
     lcdVsyncStartPosition(VST);
     lcdVsyncPulseWidth(VPW);
+
+RA8876_SW_Reset(); // Testing
 
     // Init Global Variables
     _width = SCREEN_WIDTH;
