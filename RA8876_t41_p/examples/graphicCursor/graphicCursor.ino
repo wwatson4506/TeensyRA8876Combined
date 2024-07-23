@@ -247,9 +247,9 @@ void setup() {
 //  analogWrite(BACKLITE, 40);
 
   // Set 16bit mode
-  //tft.setBusWidth(16);
+//  tft.setBusWidth(16);
   // DB5.0 WR pin, RD pin, D0 pin.
-  //tft.setFlexIOPins(53,52,40);
+//  tft.setFlexIOPins(53,52,40);
 
 #if defined(use_spi)
   tft.begin(); 
