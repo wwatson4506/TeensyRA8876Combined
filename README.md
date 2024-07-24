@@ -3,7 +3,7 @@ A universal RA8876 library combining SPI and 8080 drivers for Teensy boards and 
 
 # PINOUTS
 ## WIRED
-Dev Board 5 <---------------> RA8876
+Dev Board 5 <----------> RA8876
 
     PIN                        PIN
 
