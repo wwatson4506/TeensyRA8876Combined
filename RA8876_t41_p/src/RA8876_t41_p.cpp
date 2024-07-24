@@ -994,9 +994,9 @@ FASTRUN void RA8876_t41_p::flexDma_Callback() {
   however, it seems like a waste of time to wait here, since the process otherwise completes in the background and the shifter buffers are ready to receive new data while the transfer completes.
   I think in most applications you could continue without waiting. You can start a new DMA transfer as soon as the first one completes (no need to wait for FlexIO to finish shifting). */
   WR_DMATransferDone = true;
-  if(isDMACB) {
+  //if(isDMACB) {
     _onDMACompleteCB();
-  }
+  //}
 }
 
 void RA8876_t41_p::DMAerror() {
@@ -1009,7 +1009,6 @@ void RA8876_t41_p::DMAerror() {
 FASTRUN void RA8876_t41_p::pushPixels16bitDMA(const uint16_t * pcolors, uint16_t x1, uint16_t y1, uint16_t x2, uint16_t y2) {
   uint32_t area = (x2)*(y2);
   while(WR_DMATransferDone == false) {}    //Wait for any DMA transfers to complete
-
   graphicMode(true);
   activeWindowXY(x1,y1);
   activeWindowWH(x2,y2);
