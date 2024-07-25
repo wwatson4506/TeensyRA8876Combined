@@ -273,6 +273,7 @@ class RA8876_t41_p : public RA8876_common {
     static void dmaISR();
     void flexDma_Callback();
     static DMAChannel flexDma;
+    static DMASetting _dmaSettings[2];
     static RA8876_t41_p *dmaCallback;
 };
 
