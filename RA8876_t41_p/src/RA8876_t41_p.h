@@ -184,7 +184,7 @@ class RA8876_t41_p : public RA8876_common {
     const FlexIOHandler::FLEXIO_Hardware_t *hw;
 
     // DMA 
-    bool isDMACB = false;
+    //bool isDMACB = false;
     void _onDMACompleteCB();
 	CBF _DMAcallback;
 	void onDMACompleteCB(CBF callback) {_DMAcallback = callback; }
