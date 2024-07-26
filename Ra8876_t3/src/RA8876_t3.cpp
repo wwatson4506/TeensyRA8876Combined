@@ -226,6 +226,18 @@ ru8 RA8876_t3::lcdDataRead(bool finalize) {
 }
 
 //**************************************************************//
+// Read RA8876 Data 16-bit
+//**************************************************************//
+ru16 RA8876_t3::lcdDataRead16(bool finalize) {
+    ru16 _data = (RA8876_SPI_DATAREAD16 | 0x00);
+
+    startSend();
+    ru16 data = _pspi->transfer16(_data);
+    endSend(finalize);
+    return data;
+}
+
+//**************************************************************//
 // Read RA8876 status register
 //**************************************************************//
 ru8 RA8876_t3::lcdStatusRead(bool finalize) {
