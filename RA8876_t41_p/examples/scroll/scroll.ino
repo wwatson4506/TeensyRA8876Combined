@@ -45,7 +45,7 @@ void setup() {
   digitalWrite(BACKLITE, HIGH);
 #endif
 
-#if defined(USE_SPI)
+#if !defined(USE_SPI)
   // Set 16bit mode
 //  tft.setBusWidth(16);
   // DB5.0 WR pin, RD pin, D0 pin.
