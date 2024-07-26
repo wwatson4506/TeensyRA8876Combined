@@ -1,30 +1,20 @@
 #include "Teensy41_Cardlike.h"
 #include "flexio_teensy_mm.c"
 #include "teensy41.c"
+#include "RA8876_Config.h"
 
-//#define use_spi
-#if defined(use_spi)
-#include <SPI.h>
-#include <RA8876_t3.h>
-#else
-//#include <RA8876_t3.h>
-#include <RA8876_t41_p.h>
+#if defined(USE_SPI)
+*********************** For 8080 parallel mode only ******************************
 #endif
-//#include <math.h>
 
-#if defined(use_spi)
-#define RA8876_CS 10
-#define RA8876_RESET 9
-#define BACKLITE 5 //External backlight control connected to this Arduino pin
-RA8876_t3 tft = RA8876_t3(RA8876_CS, RA8876_RESET); //Using standard SPI pins
-#else
+#include <SPI.h>
+#include <RA8876_t41_p.h>
+
 uint8_t dc = 13;
 uint8_t cs = 11;
 uint8_t rst = 12;
 #define BACKLITE 5 //External backlight control connected to this Arduino pin
-//RA8876_t41_p lcd = RA8876_t41_p(dc,cs,rst); //(dc, cs, rst)
 RA8876_t41_p lcd = RA8876_t41_p(dc,cs,rst); //(dc, cs, rst)
-#endif
 
 uint32_t start = 0;
 uint32_t end =  0;
@@ -40,11 +30,7 @@ void setup() {
   // DB5.0 WR pin, RD pin, D0 pin.
 //  lcd.setFlexIOPins(53,52,40);
 
-#if defined(use_spi)
-  lcd.begin(); 
-#else
   lcd.begin(busSpeed);// 20 is working in 8bit and 16bit mode on T41
-#endif
   delay(100);
 
   Serial.print("Bus speed: ");

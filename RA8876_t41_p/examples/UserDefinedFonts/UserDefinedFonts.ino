@@ -1,6 +1,10 @@
 // UserDefinedFonts.ino
+
+#define use_spi
 #include "Arduino.h"
-#if defined(use_spi)
+#include "RA8876_Config.h"
+
+#if defined(USE_SPI)
 #include <SPI.h>
 #include <RA8876_t3.h>
 #else
@@ -9,7 +13,7 @@
 #include <math.h>
 #include "font8x16.h"
 
-#if defined(use_spi)
+#if defined(USE_SPI)
 #define RA8876_CS 10
 #define RA8876_RESET 9
 #define BACKLITE 7 //External backlight control connected to this Arduino pin
@@ -18,34 +22,15 @@ RA8876_t3 tft = RA8876_t3(RA8876_CS, RA8876_RESET); //Using standard SPI pins
 uint8_t dc = 13;
 uint8_t cs = 11;
 uint8_t rst = 12;
-#define BACKLITE 7 //External backlight control connected to this Arduino pin
+#define BACKLITE 5 //External backlight control connected to this Arduino pin
 RA8876_t41_p tft = RA8876_t41_p(dc,cs,rst); //(dc, cs, rst)
 #endif
 
 // Array of Simple RA8876 Basic Colors
 PROGMEM uint16_t myColors[] = {
-	0x0000,
-	0xffff,
-	0xf800,
-	0xfc10,
-	0x8000,
-	0x07e0,
-	0x87f0,
-	0x0400,
-	0x001f,
-	0x051f,
-	0x841f,
-	0x0010,
-	0xffe0,
-	0xfff0,
-	0x8400,
-	0x07ff,
-	0x87ff,
-	0x0410,
-	0xf81f,
-	0xfc1f,
-	0x8010,
-	0xA145
+	0x0000,	0xffff,	0xf800,	0xfc10,	0x8000,	0x07e0,	0x87f0,	0x0400,
+	0x001f,	0x051f,	0x841f,	0x0010,	0xffe0,	0xfff0,	0x8400,	0x07ff,
+	0x87ff,	0x0410,	0xf81f,	0xfc1f,	0x8010,	0xA145
 };
 
 void setup() {
@@ -58,13 +43,16 @@ void setup() {
   digitalWrite(BACKLITE, HIGH);
 #endif
 
+#if !defined(USE_SPI)
   // Set 16bit mode
 //  tft.setBusWidth(16);
   // DB5.0 WR pin, RD pin, D0 pin.
 //  tft.setFlexIOPins(53,52,40);
+#endif
 
-#if defined(use_spi)
-  tft.begin(); 
+#if defined(USE_SPI)
+  tft.begin(); // default SPI clock speed is 30000000 MHz 
+//  tft.begin(47000000); // Max is 47000000 MHz (using short 3" wires)
 #else
   tft.begin(20);// 20 is working in 8bit and 16bit mode on T41
 #endif

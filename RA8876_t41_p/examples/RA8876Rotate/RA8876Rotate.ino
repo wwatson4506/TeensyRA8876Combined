@@ -1,5 +1,6 @@
-//#define use_spi
-#if defined(use_spi)
+#include "RA8876_Config.h"
+
+#if defined(USE_SPI)
 #include <SPI.h>
 #include <RA8876_t3.h>
 #else
@@ -7,7 +8,7 @@
 #endif
 #include "font_Arial.h"
 
-#if defined(use_spi)
+#if defined(USE_SPI)
 #define RA8876_CS 10
 #define RA8876_RESET 9
 #define BACKLITE 7 //External backlight control connected to this Arduino pin
@@ -32,13 +33,15 @@ void setup() {
   while (!Serial && ((millis () - debug_start) <= 5000)) ;
   Serial.println("Setup");
 
+#if defined(USE_SPI)
   // Set 16bit mode
 //  tft.setBusWidth(16);
   // DB5.0 WR pin, RD pin, D0 pin.
 //  tft.setFlexIOPins(53,52,40);
-
-#if defined(use_spi)
-  tft.begin(20000000); 
+#endif
+#if defined(USE_SPI)
+  tft.begin(); // default SPI clock speed is 30000000 MHz 
+//  tft.begin(47000000); // Max is 47000000 MHz (using short 3" wires)
 #else
   tft.begin(20);// 20 is working in 8bit and 16bit mode on T41
 #endif

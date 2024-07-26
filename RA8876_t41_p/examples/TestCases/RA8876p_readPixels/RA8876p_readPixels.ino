@@ -1,14 +1,14 @@
 #include "Arduino.h"
+#include "RA8876_Config.h"
 
-//#define use_spi
-#if defined(use_spi)
+#if defined(USE_SPI)
 #include <RA8876_t3.h>
 #else
 #include <RA8876_t41_p.h>
 #endif
 #include "font_Arial.h"
 
-#if defined(use_spi)
+#if defined(USE_SPI)
 #define TFT_CS 10
 #define TFT_RST 9
 #define TFT_BL 29
@@ -48,13 +48,16 @@ void setup() {
 //  pinMode(BACKLITE, OUTPUT);
 //  digitalWrite(BACKLITE, HIGH);
 
+#if !defined(USE_SPI)
   // Set 16bit mode
 //  tft.setBusWidth(16);
   // DB5.0 WR pin, RD pin, D0 pin.
 //  tft.setFlexIOPins(53,52,40);
+#endif
     
-#if(use_spi)
-    tft.begin();
+#if defined(USE_SPI)
+  tft.begin(); // default SPI clock speed is 30000000 MHz 
+//  tft.begin(47000000); // Max is 47000000 MHz (using short 3" wires)
 #else
     tft.begin(20);
 #endif

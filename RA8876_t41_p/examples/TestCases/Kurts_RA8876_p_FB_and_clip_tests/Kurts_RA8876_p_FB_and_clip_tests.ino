@@ -16,11 +16,11 @@
 // Currently I have options for both MICROMOD and T42 to make it
 // easier for testing
 
-//#define use_spi
+#include "RA8876_Config.h"
 
 #include <MemoryHexDump.h>
 #include <Adafruit_GFX.h>  // Core graphics library
-#if defined(use_spi)
+#if defined(USE_SPI)
 #include "SPI.h"
 #include <RA8876_t3.h>
 #else
@@ -58,10 +58,14 @@ uint8_t use_fb = 0;
 #define ORIGIN_TEST_Y 50
 
 
-#if defined(use_spi)
-#define TFT_CS 30
-#define TFT_RST 28
-#define TFT_BL 29
+#if defined(USE_SPI)
+
+#define TFT_CS 10
+#define TFT_RST 9
+
+//#define TFT_CS 30
+//#define TFT_RST 28
+//#define TFT_BL 29
 RA8876_t3 tft = RA8876_t3(TFT_CS, TFT_RST);
 #else
 uint8_t dc = 13;
@@ -101,14 +105,16 @@ void setup() {
     pinMode(TFT_BL, OUTPUT);
     digitalWrite(TFT_BL, HIGH);
 #endif
-
+#if !defined(USE_SPI)
   // Set 16bit mode
 //  tft.setBusWidth(16);
   // DB5.0 WR pin, RD pin, D0 pin.
 //  tft.setFlexIOPins(53,52,40);
+#endif
 
-#if defined(use_spi)
-    tft.begin();
+#if defined(USE_SPI)
+  tft.begin(); // default SPI clock speed is 30000000 MHz 
+//  tft.begin(47000000); // Max is 47000000 MHz (using short 3" wires)
     tft.setBusWidth(8);
 #else
     tft.begin(20);

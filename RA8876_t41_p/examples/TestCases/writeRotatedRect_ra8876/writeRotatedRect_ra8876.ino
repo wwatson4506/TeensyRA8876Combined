@@ -3,9 +3,9 @@
 // easier for testing
 
 #include "Arduino.h"
+#include "RA8876_Config.h"
 
-//#define use_spi
-#if defined(use_spi)
+#if defined(USE_SPI)
 #include <SPI.h>
 #include <RA8876_t3.h>
 #else
@@ -15,7 +15,7 @@
 #include "flexio_teensy_mm.c"
 #include "T41_top_card.c"
 
-#if defined(use_spi)
+#if defined(USE_SPI)
 #define TFT_CS 10
 #define TFT_RST 9
 RA8876_t3 tft = RA8876_t3(TFT_CS, TFT_RST);
@@ -33,13 +33,16 @@ void setup() {
     Serial.print(CrashReport);
   }
 
+#if !defined(USE_SPI)
   // Set 16bit mode
 //  tft.setBusWidth(16);
   // DB5.0 WR pin, RD pin, D0 pin.
 //  tft.setFlexIOPins(53,52,40);
+#endif
 
-#if defined(use_spi)
-  tft.begin();
+#if defined(USE_SPI)
+  tft.begin(); // default SPI clock speed is 30000000 MHz 
+//  tft.begin(47000000); // Max is 47000000 MHz (using short 3" wires)
 #else
   tft.begin(20);                               // 20 is working in 8bit and 16bit mode on T41
 #endif

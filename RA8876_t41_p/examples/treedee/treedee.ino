@@ -2,9 +2,9 @@
 // Taken from sumotoy's RA8875 library
 // and modified for use with the RA8876.
 #include "Arduino.h"
+#include "RA8876_Config.h"
 
-//#define use_spi
-#if defined(use_spi)
+#if defined(USE_SPI)
 #include <SPI.h>
 #include <RA8876_t3.h>
 #else
@@ -12,7 +12,7 @@
 #endif
 #include <math.h>
 
-#if defined(use_spi)
+#if defined(USE_SPI)
 #define RA8876_CS 10
 #define RA8876_RESET 9
 #define BACKLITE 7 //External backlight control connected to this Arduino pin
@@ -27,28 +27,9 @@ RA8876_t41_p tft = RA8876_t41_p(dc,cs,rst); //(dc, cs, rst)
 
 // Array of RA8876 Basic Colors
 PROGMEM uint16_t myColors[] = {
-	0x0000,
-	0xffff,
-	0xf800,
-	0xfc10,
-	0x8000,
-	0x07e0,
-	0x87f0,
-	0x0400,
-	0x001f,
-	0x051f,
-	0x841f,
-	0x0010,
-	0xffe0,
-	0xfff0,
-	0x8400,
-	0x07ff,
-	0x87ff,
-	0x0410,
-	0xf81f,
-	0xfc1f,
-	0x8010,
-	0xA145
+	0x0000,	0xffff,	0xf800,	0xfc10,	0x8000,	0x07e0,	0x87f0,	0x0400,
+	0x001f,	0x051f,	0x841f,	0x0010,	0xffe0,	0xfff0,	0x8400,	0x07ff,
+	0x87ff,	0x0410,	0xf81f,	0xfc1f,	0x8010,	0xA145
 };
 
 float sin_d[] = { 
@@ -89,13 +70,16 @@ void setup() {
   digitalWrite(BACKLITE, HIGH);
 #endif
     
+#if !defined(USE_SPI)
   // Set 16bit mode
 //  tft.setBusWidth(16);
   // DB5.0 WR pin, RD pin, D0 pin.
 //  tft.setFlexIOPins(53,52,40);
+#endif
 
-#if defined(use_spi)
-  tft.begin(); 
+#if defined(USE_SPI)
+  tft.begin(); // default SPI clock speed is 30000000 MHz 
+//  tft.begin(47000000); // Max is 47000000 MHz (using short 3" wires)
 #else
   tft.begin(20);// 20 is working in 8bit and 16bit mode on T41
 #endif

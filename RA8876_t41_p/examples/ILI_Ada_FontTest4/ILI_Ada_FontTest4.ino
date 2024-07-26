@@ -1,16 +1,15 @@
 #include <Adafruit_GFX.h>
+#include "RA8876_Config.h"
 
 #include <SPI.h>
-//#define use_spi
 
-#if defined(use_spi)
+#if defined(USE_SPI)
+//************************************ OpenSans24 FONT NOT WORKING SPI MODE ******************************
 #include <SPI.h>
 #include <RA8876_t3.h>
 #else
 #include <RA8876_t41_p.h>
 #endif
-#include <math.h>
-
 
 #include "font_Arial.h"
 #include "font_ArialBold.h"
@@ -27,7 +26,7 @@
 
 typedef struct {
   const ILI9341_t3_font_t *ili_font;
-  const GFXfont       *gfx_font;
+  const GFXfont       *gfx_font;  // nullptr this sketch
   const char          *font_name;
   uint16_t            font_fg_color;
   uint16_t            font_bg_color;
@@ -55,7 +54,7 @@ const ili_fonts_test_t font_test_list[] = {
 
 extern void displayStuff(const char *font_name);
 
-#if defined(use_spi)
+#if defined(USE_SPI)
 #define RA8876_CS 10
 #define RA8876_RESET 9
 #define BACKLITE 7 //External backlight control connected to this Arduino pin
@@ -75,14 +74,17 @@ void setup() {
   long unsigned debug_start = millis ();
   while (!Serial && ((millis () - debug_start) <= 5000)) ;
   Serial.println("Setup");
-  
+
+#if !defined(USE_SPI)
   // Set 16bit mode
 //  tft.setBusWidth(16);
   // DB5.0 WR pin, RD pin, D0 pin.
 //  tft.setFlexIOPins(53,52,40);
+#endif
 
-#if defined(use_spi)
-  tft.begin(30000000);
+#if defined(USE_SPI)
+  tft.begin(); // default SPI clock speed is 30000000 MHz 
+//  tft.begin(47000000); // Max is 47000000 MHz (using short 3" wires)
 #else
   tft.begin(20);// 20 is working in 8bit and 16bit mode on T41
 #endif
@@ -115,7 +117,8 @@ void setup() {
   tft.setTextColor(YELLOW);
   tft.setFont(Michroma_14);
   displayStuff("Michroma_14");
-  stepThrough();
+
+//  stepThrough(); // Is this intentional?
 
   tft.setTextColor(BLACK, YELLOW);
   tft.setFont(Crystal_24_Italic);
@@ -134,6 +137,7 @@ void setup() {
 
   Serial.println("Basic Font Display Complete");
   Serial.println("Loop test for alt colors + font");
+  stepThrough();
 }
 
 void loop()

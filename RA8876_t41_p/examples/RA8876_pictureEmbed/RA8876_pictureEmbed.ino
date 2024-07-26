@@ -4,9 +4,9 @@
 // By Frank Bösing
 //
 // https://forum.pjrc.com/threads/32601-SPI-Library-Issue-w-ILI9341-TFT-amp-PN532-NFC-Module-on-Teensy-3-2?p=94534&viewfull=1#post94534
+#include "RA8876_Config.h"
 
-//#define use_spi
-#if defined(use_spi)
+#if defined(USE_SPI)
 #include <SPI.h>
 #include <RA8876_t3.h>
 #else
@@ -19,7 +19,7 @@
 #define USE_WRITERECT
 //#define USE_PUTPICTURE
 
-#if defined(use_spi)
+#if defined(USE_SPI)
 #define RA8876_CS 10
 #define RA8876_RESET 9
 #define BACKLITE 7 //External backlight control connected to this Arduino pin
@@ -74,14 +74,16 @@ void setup() {
 //  pinMode(BACKLITE, OUTPUT);
 //  digitalWrite(BACKLITE, HIGH);
 #endif
-
+#if !defined(USE_SPI)
   // Set 16bit mode
 //  tft.setBusWidth(16);
   // DB5.0 WR pin, RD pin, D0 pin.
 //  tft.setFlexIOPins(53,52,40);
+#endif
 
-#if defined(use_spi)
-  tft.begin(40000000); 
+#if defined(USE_SPI)
+  tft.begin(); // default SPI clock speed is 30000000 MHz 
+//  tft.begin(47000000); // Max is 47000000 MHz (using short 3" wires)
 #else
   tft.begin(20);// 20 is working in 8bit and 16bit mode on T41
 #endif

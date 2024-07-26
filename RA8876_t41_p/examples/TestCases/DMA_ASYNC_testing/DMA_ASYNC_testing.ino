@@ -1,17 +1,15 @@
 #include "flexio_teensy_mm.c"
 #include "teensy41.c"
-
-//#define use_spi
-#if defined(use_spi)
+#include "RA8876_Config.h"
+#if defined(USE_SPI)
+*********************** For 8080 parallel mode only ******************************
 #include <SPI.h>
 #include <RA8876_t3.h>
 #else
-//#include <RA8876_t3.h>
 #include <RA8876_t41_p.h>
 #endif
-//#include <math.h>
 
-#if defined(use_spi)
+#if defined(USE_SPI)
 #define RA8876_CS 10
 #define RA8876_RESET 9
 #define BACKLITE 5 //External backlight control connected to this Arduino pin
@@ -33,13 +31,15 @@ void setup() {
   Serial.printf("%c DB5 board and RA8876 parallel 8080 mode testing (8-Bit/16-bit,DMA/ASYNC)\n\n",12);
 //  Serial.print(CrashReport);
 
+#if !defined(USE_SPI)
   // Un-comment to set 16bit mode
-  lcd.setBusWidth(16);
+//  lcd.setBusWidth(16);
   // DB5.0 WR pin, RD pin, D0 pin.
   // Set for DB5 board.
-  lcd.setFlexIOPins(53,52,40);  //Set this to match your board configuration.
+//  lcd.setFlexIOPins(53,52,40);  //Set this to match your board configuration.
+#endif
 
-#if defined(use_spi)
+#if defined(USE_SPI)
   lcd.begin(); 
 #else
   lcd.begin(busSpeed); // 20 is working in 8bit and 16bit mode on T41
