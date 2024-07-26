@@ -1,5 +1,7 @@
-//#define use_spi
-#if defined(use_spi)
+#include "RA8876_Config.h"
+
+#if defined(USE_SPI)
+*********************** For 8080 parallel mode only ******************************
 #include <SPI.h>
 #include <RA8876_t3.h>
 #else
@@ -8,7 +10,7 @@
 #endif
 //#include <math.h>
 
-#if defined(use_spi)
+#if defined(USE_SPI)
 #define RA8876_CS 10
 #define RA8876_RESET 9
 #define BACKLITE 5                                   //External backlight control connected to this Arduino pin
