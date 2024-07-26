@@ -152,7 +152,7 @@ class RA8876_common : public Print {
     virtual void lcdRegWrite(ru8 reg, bool finalize = true) {};
     virtual void lcdDataWrite(ru8 data, bool finalize = true) {};
     virtual ru8 lcdDataRead(bool finalize = true);
-	virtual ru16 lcdDataRead16(bool finalize = true);
+    virtual ru16 lcdDataRead16(bool finalize = true);
     virtual ru8 lcdStatusRead(bool finalize = true);
     virtual void lcdRegDataWrite(ru8 reg, ru8 data, bool finalize = 0) {};
     virtual ru8 lcdRegDataRead(ru8 reg, bool finalize = true);
