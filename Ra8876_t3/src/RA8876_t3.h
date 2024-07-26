@@ -94,10 +94,11 @@ class RA8876_t3 : public RA8876_common {
 
     /*access*/
     //dummy
-    ru16 lcdDataRead16(bool finalize = true) { return 0; };
+    //ru16 lcdDataRead16(bool finalize = true) { return 0; };
     void lcdRegWrite(ru8 reg, bool finalize = true);
     void lcdDataWrite(ru8 data, bool finalize = true);
     ru8 lcdDataRead(bool finalize = true);
+    ru16 lcdDataRead16(bool finalize = true);
     ru16 lcdDataRead16bpp(bool finalize = true);
     ru8 lcdStatusRead(bool finalize = true);
     void lcdRegDataWrite(ru8 reg, ru8 data, bool finalize = true);
